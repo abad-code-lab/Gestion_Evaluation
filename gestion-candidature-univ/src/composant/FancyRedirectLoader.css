@@ -1,0 +1,62 @@
+.fancy-loader {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(145deg, #e3f2fd, #bbdefb);
+    font-family: 'Poppins', sans-serif;
+    color: #0d47a1;
+    text-align: center;
+    animation: fadeIn 1s ease-in-out;
+  }
+  
+  .svg-logo {
+    margin-bottom: 30px;
+  }
+  
+  .typewriter {
+    font-weight: bold;
+    font-size: 1.3rem;
+    border-right: 2px solid #0d47a1;
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  
+  .countdown-text {
+    margin-top: 20px;
+    font-size: 1.1rem;
+    color: #1565c0;
+  }
+  
+  .count {
+    font-weight: bold;
+    font-size: 1.3rem;
+  }
+  
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+      transform: scale(0.98);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+  
+
+  .rotate-circle {
+    animation: rotate 2s linear infinite;
+    transform-origin: center;
+  }
+  
+  @keyframes rotate {
+    0% {
+      transform: rotate(0deg);
+    }
+    100% {
+      transform: rotate(360deg);
+    }
+  }
+  

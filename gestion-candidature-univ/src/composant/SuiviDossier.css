@@ -1,0 +1,321 @@
+/* Conteneur principal */
+.suivi-dossier-container {
+  text-align: center;
+  margin: 50px auto;
+  padding: 40px;
+  max-width: 800px;
+  border-radius: 15px;
+  background: #f9f9f9;
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.1);
+}
+
+.candidate-info {
+  margin-bottom: 30px;
+  font-size: 18px;
+  color: #424242;
+  text-align: left;
+  padding: 10px;
+  background: #fafafa;
+  border-radius: 8px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+}
+
+.candidate-info p {
+  margin: 10px 0;
+}
+
+.progress-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 30px 0;
+}
+
+.step-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  position: relative;
+  width: 100%;
+}
+
+.step-icon {
+  width: 60px;
+  height: 60px;
+  font-size: 30px;
+  margin-bottom: 10px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #e0e0e0;
+  color: #757575;
+  transition: background-color 0.3s, color 0.3s;
+}
+
+/* Couleur spécifique pour chaque étape */
+
+/* Soumission des informations - Bleu */
+.step-icon.soumission.completed {
+  background-color: #2196f3; /* Bleu */
+  color: white;
+}
+
+.step-icon.soumission.current {
+  background-color: #2196f3; /* Bleu */
+  color: white;
+}
+
+/* Paiement - Bleu clair */
+.step-icon.paiement.completed {
+  background-color: #dbce19; /* Bleu clair */
+  color: white;
+}
+
+.step-icon.paiement.current {
+  background-color: #dbce19; /* Bleu clair */
+  color: white;
+}
+.gold-button {
+  background-color: #ffd700 !important;
+  color: #000 !important;
+  font-weight: bold;
+}
+
+@keyframes flash {
+  0% {
+    box-shadow: 0 0 5px #ffd700;
+  }
+  50% {
+    box-shadow: 0 0 20px #ffd700, 0 0 30px #ffd700;
+  }
+  100% {
+    box-shadow: 0 0 5px #ffd700;
+  }
+}
+
+.flashing-button {
+  animation: flash 1.5s infinite;
+}
+
+/* Traitement - Rouge */
+.step-icon.traitement.completed {
+  background-color: #f44336; /* Rouge */
+  color: white;
+}
+
+.step-icon.traitement.current {
+  background-color: #f44336; /* Rouge */
+  color: white;
+}
+
+/* Résultat Provisoire - Jaune */
+.step-icon.provisoire.completed {
+  background-color: #4dcd16; /* Vert */
+  color: white;
+}
+
+.step-icon.provisoire.current {
+  background-color: #4dcd16; /* Vert */
+  color: white;
+}
+
+/* Résultat Définitif - Vert */
+.step-icon.definitif.completed {
+  background-color: #4caf50; /* Vert */
+  color: white;
+}
+
+.step-icon.definitif.current {
+  background-color: #4caf50; /* Vert */
+  color: white;
+}
+
+/* Étape en attente */
+.step-icon.pending {
+  background-color: #e0e0e0;
+  color: #757575;
+}
+
+/* Titres des étapes */
+.step-title {
+  margin-top: 15px;
+  font-size: 18px;
+  color: #424242;
+}
+
+/* Titres avec les couleurs spécifiques */
+
+/* Soumission des informations - Bleu */
+.step-title.soumission.completed {
+  color: #2196f3; /* Bleu */
+}
+
+.step-title.soumission.current {
+  color: #2196f3; /* Bleu */
+}
+
+/* Paiement - Bleu clair */
+.step-title.paiement.completed {
+  color: #dbce19; /* Bleu clair */
+}
+
+.step-title.paiement.current {
+  color: #dbce19; /* Bleu clair */
+}
+
+/* Traitement - Rouge */
+.step-title.traitement.completed {
+  color: #f44336; /* Rouge */
+}
+
+.step-title.traitement.current {
+  color: #f44336; /* Rouge */
+}
+
+/* Résultat Provisoire - Jaune */
+.step-title.provisoire.completed {
+  color: #4dcd16; /* Jaune */
+}
+
+.step-title.provisoire.current {
+  color: #4dcd16; /* Jaune */
+}
+
+/* Résultat Définitif - Vert */
+.step-title.definitif.completed {
+  color: #4caf50; /* Vert */
+}
+
+.step-title.definitif.current {
+  color: #4caf50; /* Vert */
+}
+
+/* Barres de progression */
+.progress-bar {
+  height: 6px;
+  background-color: #e0e0e0;
+  flex: 1;
+  margin-top: 10px;
+}
+
+.progress-bar.completed {
+  background-color: #4caf50;
+}
+
+/* Message de statut */
+.status-message {
+  margin-top: 30px;
+  font-size: 18px;
+  font-weight: bold;
+  color: #424242;
+}
+
+.status-message.provisional {
+  color: #ffc107; /* Jaune */
+  font-weight: bold;
+  background-color: #fff9c4; /* Jaune clair pour le fond */
+  padding: 15px;
+  border-radius: 8px;
+}
+
+/* Option des por mobile */
+/* Styles pour les appareils mobiles */
+@media only screen and (max-width: 767px) {
+  /* Conteneur principal - version mobile */
+  .suivi-dossier-container {
+    padding: 20px 15px;
+    margin: 20px auto;
+    max-width: 100%;
+  }
+
+  .candidate-info {
+    font-size: 16px;
+    padding: 10px;
+  }
+
+  /* Réorganisation des étapes de progression pour mobile */
+  .progress-container {
+    flex-direction: column;
+    margin: 15px 0;
+  }
+
+  .step-container {
+    flex-direction: row;
+    width: 100%;
+    margin-bottom: 15px;
+    justify-content: flex-start;
+    align-items: center;
+  }
+
+  .step-icon {
+    width: 40px;
+    height: 40px;
+    font-size: 20px;
+    margin-bottom: 0;
+    margin-right: 15px;
+  }
+
+  .step-title {
+    margin-top: 0;
+    font-size: 16px;
+    text-align: left;
+  }
+
+  /* Masquer les barres de progression en mode mobile */
+  .progress-bar {
+    display: none;
+  }
+
+  /* Message de statut - version mobile */
+  .status-message {
+    font-size: 16px;
+    padding: 10px;
+    margin-top: 20px;
+  }
+
+  /* Animations pour les boutons flashy - optimisé pour mobile */
+  @keyframes flash-mobile {
+    0% {
+      box-shadow: 0 0 3px #ffd700;
+    }
+    50% {
+      box-shadow: 0 0 15px #ffd700;
+    }
+    100% {
+      box-shadow: 0 0 3px #ffd700;
+    }
+  }
+
+  .flashing-button {
+    animation: flash-mobile 1.5s infinite;
+  }
+
+  /* Bouton d'action - version mobile */
+  .gold-button {
+    width: 100%;
+    padding: 12px;
+    font-size: 16px;
+  }
+}
+
+/* Styles pour les très petits écrans (moins de 375px) */
+@media only screen and (max-width: 375px) {
+  .step-icon {
+    width: 35px;
+    height: 35px;
+    font-size: 18px;
+  }
+
+  .step-title {
+    font-size: 14px;
+  }
+
+  .candidate-info {
+    font-size: 14px;
+  }
+
+  .status-message {
+    font-size: 14px;
+  }
+}

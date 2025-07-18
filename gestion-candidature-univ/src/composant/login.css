@@ -1,0 +1,117 @@
+/* Pour la page login */
+/* Global Styles */
+body {
+  background-color: #f0f0f0;
+  font-family: 'Roboto', sans-serif;
+}
+
+.login-bg {
+  /* background-image: url('https://images.unsplash.com/photo-1515014053414-774b22c5db7b?q=80&w=1935&auto=format&fit=crop&ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D'); */
+  /* background-image: url("/images/wave-qr.png"); */
+  background-size: cover;
+  background-position: center;
+  height: 100vh;
+}
+
+/* Card Styling */
+.card-panel {
+  background: rgba(255, 255, 255, 0.8); /* Opacité légère */
+  border-radius: 15px;
+  padding: 20px;
+}
+
+.login-card {
+  padding: 30px;
+  box-shadow: 0px 8px 15px rgba(0, 0, 0, 0.2);
+}
+
+.login-card h1 {
+  font-size: 2rem;
+  font-weight: bold;
+  margin-bottom: 25px;
+  text-align: center;
+}
+
+.material-icons-login {
+  color: #FF5722; /* Icônes avec une couleur attrayante */
+}
+
+/* Input Fields */
+.input-field-login {
+  width: 100%; /* Assurez-vous que les champs prennent toute la largeur du parent */
+}
+
+.input-field-login input[type="email"], .input-field-login input[type="password"] {
+  border-radius: 50px;
+  padding-left: 40px; /* Pour les icônes */
+  /* width: 100% */
+  max-width: 70%; /* Empêche le dépassement du parent */
+}
+
+.input-field-login input[type="email"]:focus, .input-field-login input[type="password"]:focus {
+  border-color: #FF5722;
+  box-shadow: 0 2px 5px #FF5722;
+}
+
+.input-field-login label {
+  font-size: 1rem;
+  color: #333;
+  font-weight: bolder;
+  text-align: center;
+  /* left: 300%; */
+}
+
+.label-login{
+  font-size: 1rem;
+  color: #1d329a;
+  font-weight: bolder;
+  right: 1000px;
+}
+
+/* Buttons */
+.button-login {
+  border-radius: 30px;
+  background: linear-gradient(45deg, #FF5722, #FF9800);
+  font-size: 1.1rem;
+  padding: 12px 0;
+  letter-spacing: 1px;
+  transition: all 0.3s ease;
+  width: 100%; /* Le bouton prend toute la largeur de son parent */
+}
+
+.button-login:hover {
+  background: linear-gradient(45deg, #FF9800, #FF5722);
+}
+
+/* Links */
+.a-login {
+  color: #FF5722;
+  text-decoration: none;
+}
+
+.a-login:hover {
+  text-decoration: underline;
+}
+
+/* Checkbox */
+input[type="checkbox"] {
+  margin-top: 10px;
+}
+
+/* Footer Links */
+.margin.medium-small {
+  font-size: 0.9rem;
+  color: #333;
+}
+
+/* Responsiveness */
+@media (max-width: 600px) {
+  .login-card {
+    width: 90%;
+  }
+
+  /* .container {
+    padding: 20px;
+    background-color: #FF5722;
+  } */
+}

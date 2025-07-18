@@ -1,0 +1,313 @@
+[
+  {
+    "semestre": 1,
+    "ues": [
+      {
+        "id": 1,
+        "codeUE": "IN411",
+        "intitule": "Génie logiciel et Base de Données",
+        "ecs": [
+          { "id": 1, "codeEC": "IN4111", "intitule": "Génie logiciel" },
+          { "id": 2, "codeEC": "IN4112", "intitule": "Bases de données " }
+        ]
+      },
+      {
+        "id": 2,
+        "codeUE": "IN412",
+        "intitule": "Programmation",
+        "ecs": [
+          { "id": 3, "codeEC": "IN4121", "intitule": "Programmation objet" },
+          { "id": 4, "codeEC": "IN4122", "intitule": "Programmation avancée" }
+        ]
+      },
+      {
+        "id": 3,
+        "codeUE": "IN413",
+        "intitule": "Réseaux",
+        "ecs": [
+          { "id": 5, "codeEC": "IN4131", "intitule": "Architecture des réseaux LAN/WAN" },
+          { "id": 6, "codeEC": "IN4132", "intitule": "Routage IP" },
+          { "id": 7, "codeEC": "IN4133", "intitule": "Services réseaux"}
+        ]
+      },
+      {
+        "id": 4,
+        "codeUE": "IN414",
+        "intitule": "Outils Mathematiques",
+        "ecs": [
+          { "id": 8, "codeEC": "IN4141", "intitule": "Probabilités et statistiques" },
+          { "id": 9, "codeEC": "IN4142", "intitule": "Algorithmique des graphes" }
+        ]
+      },
+      {
+        "id": 5,
+        "codeUE": "IN415",
+        "intitule": "Humanités et communications 1",
+        "ecs": [
+          { "id": 10, "codeEC": "IN4151", "intitule": "Technique de communications" },
+          { "id": 11, "codeEC": "IN4152", "intitule": "Anglais" }
+        ]
+      }
+    ]
+  },
+
+  {
+    "semestre": 2,
+    "filiere": "GL",
+    "label": "Semestre 2 - GL",
+    "ues": [
+        {
+          "id": 1,
+        "codeUE": "IN421",
+        "intitule": "Administration des systèmes informatiques",
+        "ecs": [
+          {"id": 1, "codeEC": "GL4211", "intitule": "Administration Bases de Données"},
+          {"id": 2, "codeEC": "GL4212", "intitule": "Administration Systèmes"}
+        ]
+      },
+      {
+        "id": 2,
+        "codeUE": "IN422",
+        "intitule": "Technologies XML",
+        "ecs": [
+          {"id": 3, "codeEC": "GL4221", "intitule": "Formats et manipulation de données"}
+        ]
+      },
+      {
+        "id": 3,
+        "codeUE": "IN423",
+        "intitule": "Projet ou stage de 2 mois (1/2)",
+        "ecs": [
+          {"id": 4, "codeEC": "GL4231", "intitule": "Projet"},
+          {"id": 5, "codeEC": "GL4232", "intitule": "Stage"}
+        ]
+      },
+      {
+        "id": 4,
+        "codeUE": "IN424",
+        "intitule": "Outil de l'internet",
+        "ecs": [
+          {"id": 6, "codeEC": "GL4241", "intitule": "Web services"},
+          {"id": 7, "codeEC": "GL4242", "intitule": "Technologies du Web"}
+        ]
+      },
+      {
+        "id": 5,
+        "codeUE": "IN425",
+        "intitule": "Système à base de connaissance (Intelligence artificielle)",
+        "ecs": [
+          {"id": 8, "codeEC": "GL4251", "intitule": "Programmation fonctionnelle"},
+          {"id": 9, "codeEC": "GL4252", "intitule": "Intelligence artificielle"}
+        ]
+      },
+      {
+        "id": 6,
+        "codeUE": "IN426",
+        "intitule": "Programmation 2",
+        "ecs": [
+          {"id": 10, "codeEC": "GL4261", "intitule": "Développement mobile"},
+          {"id": 11, "codeEC": "GL4262", "intitule": "Programmation réseaux"}
+        ]
+      }
+    ]
+  },
+  {
+    "semestre": 2,
+    "filiere": "RS",
+    "label": "Semestre 2 - RS",
+    "ues": [
+      {
+        "id": 1,
+        "codeUE": "RS421",
+        "intitule": "Administration des systèmes informatiques",
+        "ecs": [
+          {"id": 1, "codeEC": "RS4211", "intitule": "Virtualisation"},
+          {"id": 2, "codeEC": "RS4212", "intitule": "Administration systèmes"}
+        ]
+      },
+      {
+        "id": 2,
+        "codeUE": "RS422",
+        "intitule": "Réseaux et sécurité",
+        "ecs": [
+          {"id": 3, "codeEC": "RS4221", "intitule": "Qualité de service et Performance des réseaux"},
+          {"id": 4, "codeEC": "RS4222", "intitule": "Sécurité des réseaux"}
+        ]
+      },
+      {
+        "id": 3,
+        "codeUE": "RS423",
+        "intitule": "Télécommunications",
+        "ecs": [
+          {"id": 5, "codeEC": "RS4231", "intitule": "Support de transmission"},
+          {"id": 6, "codeEC": "RS4232", "intitule": "Bases des Télécommunications"}
+        ]
+      },
+      {
+        "id": 4,
+        "codeUE": "RS424",
+        "intitule": "Développement d'applications",
+        "ecs": [
+          {"id": 7, "codeEC": "RS4241", "intitule": "Développement mobile"},
+          {"id": 8, "codeEC": "RS4242", "intitule": "Formats et manipulation de données"}
+        ]
+      },
+      {
+        "id": 5,
+        "codeUE": "RS425",
+        "intitule": "Programmation 2",
+        "ecs": [
+          {"id": 9, "codeEC": "RS4251", "intitule": "Programmation réseau"}
+        ]
+      },
+      {
+        "id": 6,
+        "codeUE": "RS426",
+        "intitule": "Projet ou stage de 2 mois (1/2)",
+        "ecs": [
+          {"id": 10, "codeEC": "RS4261", "intitule": "Projet"},
+          {"ind": 11, "codeEC": "RS4262", "intitule": "Stage"}
+        ]
+      }
+    ]
+  },
+  {
+    "semestre": 3,
+    "filiere": "GL",
+    "label": "Semestre 3 - GL",
+    "ues": [
+      {
+        "id": 1,
+        "codeUE": "GL511",
+        "intitule": "Système réparti",
+        "ecs": [
+          {"id": 1, "codeEC": "GL5111", "intitule": "Systèmes répartis et cloud computing "},
+          {"ind": 2, "codeEC": "GL5112", "intitule": "Objets connectés"}
+        ]
+      },
+      {
+        "id": 2,
+        "codeUE": "GL512",
+        "intitule": "Génie logiciel",
+        "ecs": [
+          {"id": 3, "codeEC": "GL5121", "intitule": "Architecture Logicielle"},
+          {"id": 4, "codeEC": "GL5122", "intitule": "Conduite de projet"},
+          {"id": 5, "codeEC": "GL5123", "intitule": "Qualité logicielle : outils et méthodes"}
+        ]
+      },
+      {
+        "id": 3,
+        "codeUE": "GL513",
+        "intitule": "Technologies  innovantes",
+        "ecs": [
+          {"id": 6, "codeEC": "GL5131", "intitule": "Big data"},
+          {"id": 7, "codeEC": "GL5133", "intitule": "Machine Learning"}
+        ]
+      },
+      {
+        "id": 4,
+        "codeUE": "GL514",
+        "intitule": "Humanités et carrières",
+        "ecs": [
+          {"id": 8, "codeEC": "GL5141", "intitule": "Initiation à la recherche"},
+          {"ind": 9, "codeEC": "GL5142", "intitule": "Droit des TIC"},
+          {"ind": 10, "codeEC": "GL5143", "intitule": "Création et Culture d'entreprise"}
+        ]
+      },
+      {
+        "id": 5,
+        "codeUE": "GL515",
+        "intitule": "Technologies avancées",
+        "ecs": [
+          {"id": 11, "codeEC": "GL5151", "intitule": "Technologies avancées"}
+        ]
+      }
+    ]
+  },
+  {
+    "semestre": 3,
+    "filiere": "RS",
+    "label": "Semestre 3 - RS",
+    "ues": [
+      {
+        "id": 1,
+        "codeUE": "RS511",
+        "intitule": "Objets connectés et services web",
+        "ecs": [
+          {"id": 1, "codeEC": "RS5111", "intitule": "Objets connectés"},
+          {"id": 2, "codeEC": "RS5112", "intitule": "Services web"}
+        ]
+      },
+      {
+        "id": 2,
+        "codeUE": "RS512",
+        "intitule": "Technologies sans fil",
+        "ecs": [
+          {"id": 3, "codeEC": "RS5121", "intitule": "Réseaux mobiles"},
+          {"id": 4, "codeEC": "RS5122", "intitule": "Réseaux sans fil"}
+        ]
+      },
+      {
+        "id": 3,
+        "codeUE": "RS513",
+        "intitule": "Réseaux innovants",
+        "ecs": [
+          {"id": 5, "codeEC": "RS5131", "intitule": "Protocole IPv6"},
+          {"id": 6, "codeEC": "RS5132", "intitule": "Nouvelles générations de réseaux"}
+        ]
+      },
+      {
+        "id": 4,
+        "codeUE": "RS514",
+        "intitule": "Cloud et sécurité",
+        "ecs": [
+          {"id": 7, "codeEC": "RS5141", "intitule": "Systèmes répartis et Cloud computing"},
+          {"id": 8, "codeEC": "RS5142", "intitule": "Sécurité avancée"}
+        ]
+      },
+      {
+        "id": 4,
+        "codeUE": "RS515",
+        "intitule": "Humanités et carrieres",
+        "ecs": [
+          {"id": 9, "codeEC": "RS5151", "intitule": "Droit des TIC"},
+          {"id": 10, "codeEC": "RS5152", "intitule": "Conduite de projet"},
+          {"id": 11, "codeEC": "RS5153", "intitule": "Création et Culture d'entreprise"},
+          {"id": 12, "codeEC": "RS5154", "intitule": "Initiation à la recherche"}
+        ]
+      }
+    ]
+  },
+  {
+    "semestre": 4,
+    "filiere": "RS",
+    "label": "Semestre 4 - RS",
+    "ues": [
+      {
+        "id": 1,
+        "codeUE": "RS611",
+        "intitule": "Stage ou Mémoire",
+        "ecs": [
+          {"id": 1, "codeEC": "RS6111", "intitule": "Rapport"},
+          {"id": 2, "codeEC": "RS6112", "intitule": "Soutenance"}
+        ]
+      }
+    ]
+  },
+  {
+    "semestre": 4,
+    "filiere": "GL",
+    "label": "Semestre 4 - GL",
+    "ues": [
+      {
+        "id": 1,
+        "codeUE": "RS611",
+        "intitule": "Stage ou Mémoire",
+        "ecs": [
+          {"id": 1, "codeEC": "RS6111", "intitule": "Rapport"},
+          {"id": 2, "codeEC": "RS6112", "intitule": "Soutenance"}
+        ]
+      }
+    ]
+  }
+]
