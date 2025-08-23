@@ -12,19 +12,7 @@ function App() {
   const { user } = useUser();
 // Get combined routes and layout
 
-
-
-
-
-
 const { routes: combinedRoutes, layout: Layout } = getUserRoutes(user);
-
-
-
-
-
-
-
   return (
     <SidebarProvider>
     <SearchProvider>

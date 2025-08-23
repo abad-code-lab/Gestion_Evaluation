@@ -1,0 +1,100 @@
+[
+  {
+    "id": 1,
+    "matricule": "202001535",
+    "nom": "DIA",
+    "prenom": "AIMEROU",
+    "annee_inscription": "2023-2024"
+  },
+  {
+    "id": 2,
+    "matricule": "202002087",
+    "nom": "DIALLO",
+    "prenom": "ABDOURAHAMANE",
+    "annee_inscription": "2023-2024"
+  },
+  {
+    "id": 3,
+    "matricule": "202001839",
+    "nom": "DIALLO",
+    "prenom": "SAFIETOU",
+    "annee_inscription": "2023-2024"
+  },
+  {
+    "id": 4,
+    "matricule": "202000602",
+    "nom": "DRAME",
+    "prenom": "EL HADJI ABDOU",
+    "annee_inscription": "2023-2024"
+  },
+  {
+    "id": 5,
+    "matricule": "202001963",
+    "nom": "FALL",
+    "prenom": "DJIBY",
+    "annee_inscription": "2023-2024"
+  },
+  {
+    "id": 6,
+    "matricule": "202001614",
+    "nom": "GAYE",
+    "prenom": "ABDOULAYE",
+    "annee_inscription": "2023-2024"
+  },
+  {
+    "id": 7,
+    "matricule": "202001941",
+    "nom": "KANE",
+    "prenom": "MOUHAMAD NASSOUR CHERIF",
+    "annee_inscription": "2023-2024"
+  },
+  {
+    "id": 8,
+    "matricule": "202001311",
+    "nom": "KONATE",
+    "prenom": "ANSOUMANA",
+    "annee_inscription": "2023-2024"
+  },
+  {
+    "id": 9,
+    "matricule": "202000014",
+    "nom": "NDIAYE",
+    "prenom": "SEYDINA MOUHAMADOU AL HAMINE",
+    "annee_inscription": "2023-2024"
+  },
+  {
+    "id": 10,
+    "matricule": "202001936",
+    "nom": "NDOYE",
+    "prenom": "MOUHAMED",
+    "annee_inscription": "2023-2024"
+  },
+  {
+    "id": 11,
+    "matricule": "20170696",
+    "nom": "DAFFE",
+    "prenom": "Abdoulaye",
+    "annee_inscription": "2023-2024"
+  },
+  {
+    "id": 12,
+    "matricule": "202001311",
+    "nom": "KONATE",
+    "prenom": "Ansoumana",
+    "annee_inscription": "2023-2024"
+  },
+  {
+    "id": 13,
+    "matricule": "20170697",
+    "nom": "DEMBELE",
+    "prenom": "Dieydi",
+    "annee_inscription": "2023-2024"
+  },
+  {
+    "id": 14,
+    "matricule": "201800103",
+    "nom": "BALDE",
+    "prenom": "Aliou Dicory",
+    "annee_inscription": "2023-2024"
+  }
+]

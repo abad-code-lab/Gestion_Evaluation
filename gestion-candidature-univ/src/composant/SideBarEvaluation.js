@@ -197,17 +197,17 @@ const MENU_DATA = {
   mainItems: [
     {
       id: 'evaluations',
-      title: 'ÉVALUATIONS ÉTUDIANTS',
+      title: 'GESTION EVALUATION',
       icon: ClipboardCheck,
       color: '#10b981, #14b8a6',
       submenu: [
         {
           id: 'gest_eval',
-          title: 'GESTION EVALUATION',
-          href: '/evaluations/ajouter',
-          icon: FolderCog,
-          color: '#22c55e'
-        }
+          title: 'DashboardAdmin',
+          href: '/admin/dashboard',
+          icon: Users,
+          color: '#ec4899, #f43f5e',
+        },
         // {
         //   id: 'eval-modification',
         //   title: 'Modifier une évaluation',
@@ -228,32 +228,32 @@ const MENU_DATA = {
         // }
       ]
     },
-    {
-      id: 'etudiants', // Nouvelle section
-      title: 'GESTION DES ÉTUDIANTS',
-      icon: Users, // Icône pour les utilisateurs
-      color: '#ec4899, #f43f5e', // Couleurs pour les étudiants
-      submenu: [
-        {
-          id: 'etudiants-liste',
-          title: 'Lister les étudiants',
-          href: '/etudiants/liste',
-          icon: User2Icon // Icône spécifique pour la liste des étudiants
-        },
-        {
-          id: 'etudiants-import-csv',
-          title: 'Importer (CSV)',
-          href: '/etudiants/import-csv',
-          icon: File // Icône pour l'import CSV
-        },
-        {
-          id: 'etudiant-inscrit',
-          title: 'Liste des inscrits',
-          href: '/etudiants/etudiant-inscrit',
-          icon: Users
-        }
-      ]
-    },
+    // {
+    //   id: 'etudiants', // Nouvelle section
+    //   title: 'GESTION DES ÉTUDIANTS',
+    //   icon: Users, // Icône pour les utilisateurs
+    //   color: '#ec4899, #f43f5e', // Couleurs pour les étudiants
+    //   submenu: [
+    //     {
+    //       id: 'etudiants-liste',
+    //       title: 'Lister les étudiants',
+    //       href: '/etudiants/liste',
+    //       icon: User2Icon // Icône spécifique pour la liste des étudiants
+    //     },
+    //     {
+    //       id: 'etudiants-import-csv',
+    //       title: 'Importer (CSV)',
+    //       href: '/etudiants/import-csv',
+    //       icon: File // Icône pour l'import CSV
+    //     },
+    //     {
+    //       id: 'etudiant-inscrit',
+    //       title: 'Liste des inscrits',
+    //       href: '/etudiants/etudiant-inscrit',
+    //       icon: Users
+    //     }
+    //   ]
+    // },
     // {
     //   id: 'maquette',
     //   title: 'MAQUETTE UE & EC',
@@ -275,26 +275,26 @@ const MENU_DATA = {
     //   ]
     // },
 
-    {
-      id: 'profil', // Nouvelle section
-      title: 'MON PROFIL',
-      icon: User, // Icône pour le profil utilisateur
-      color: '#0891b2, #06b6d4', // Couleurs pour le profil
-      submenu: [
-        {
-          id: 'profil-details',
-          title: 'Détails du profil',
-          href: '/profil/details',
-          icon: User2Icon // Icône pour les détails du profil
-        },
-        {
-          id: 'profil-settings',
-          title: 'Paramètres',
-          href: '/profil/parametres',
-          icon: Settings // Icône pour les paramètres
-        }
-      ]
-    }
+    // {
+    //   id: 'profil', // Nouvelle section
+    //   title: 'MON PROFIL',
+    //   icon: User, // Icône pour le profil utilisateur
+    //   color: '#0891b2, #06b6d4', // Couleurs pour le profil
+    //   submenu: [
+    //     {
+    //       id: 'profil-details',
+    //       title: 'Login',
+    //       href: '/profil/details',
+    //       icon: User2Icon // Icône pour les détails du profil
+    //     },
+    //     {
+    //       id: 'profil-settings',
+    //       title: 'Paramètres',
+    //       href: '/profil/parametres',
+    //       icon: Settings // Icône pour les paramètres
+    //     }
+    //   ]
+    // }
   ],
   singleItems: [],
   bottomItems: []
