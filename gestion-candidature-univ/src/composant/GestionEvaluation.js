@@ -10,21 +10,25 @@ const GestionEvaluation = () => {
   const [searchIne, setSearchIne] = useState("");
   const [selectedIndex, setSelectedIndex] = useState(null);
 
-  const [showModal, setShowModal] = useState(false);
-  const [modalMode, setModalMode] = useState("create"); // 'create' or 'edit'
-  const [form, setForm] = useState({
-    noteControle: "",
-    noteExamen: "",
-    inscriptionId: "",
-  });
+  const [inscriptions, setInscriptions] = useState([]);
+  const [filteredInscriptions, setFilteredInscriptions] = useState([]);
+  const [inscriptionSearch, setInscriptionSearch] = useState("");
+
+  // Pour gérer les notes saisies inline pour chaque inscription (création)
+  // Clé : inscription id, valeur : { noteControle, noteExamen }
+  const [newNotes, setNewNotes] = useState({});
+
+  // Pour gérer la modification inline d'une évaluation existante
+  const [editNotes, setEditNotes] = useState({ noteControle: "", noteExamen: "" });
+  const [editIndex, setEditIndex] = useState(null);
+
+  // Pour contrôler l'affichage de la table création évaluations
+  const [showCreationTable, setShowCreationTable] = useState(true);
+
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const [inscriptions, setInscriptions] = useState([]);
-  const [inscriptionSearch, setInscriptionSearch] = useState("");
-  const [filteredInscriptions, setFilteredInscriptions] = useState([]);
-
   const token = sessionStorage.getItem("token");
-  const navigate = useNavigate(); // Hook de navigation
+  const navigate = useNavigate();
 
   // Charger toutes les évaluations
   const fetchEvaluations = async () => {
@@ -43,7 +47,7 @@ const GestionEvaluation = () => {
     }
   };
 
-  // Charger les inscriptions depuis l'API
+  // Charger les inscriptions
   const fetchInscriptions = async () => {
     try {
       const res = await fetch(API_INSCRIPTIONS_URL, {
@@ -53,6 +57,7 @@ const GestionEvaluation = () => {
       const data = await res.json();
       setInscriptions(data);
       setFilteredInscriptions(data);
+      setShowCreationTable(true); // Réaffiche la liste au nouvel import
     } catch (error) {
       console.error("Erreur chargement inscriptions:", error);
       setInscriptions([]);
@@ -62,6 +67,7 @@ const GestionEvaluation = () => {
 
   useEffect(() => {
     fetchEvaluations();
+    fetchInscriptions();
   }, [token]);
 
   // Filtrer évaluations selon INE recherché
@@ -78,16 +84,7 @@ const GestionEvaluation = () => {
     }
   }, [searchIne, evaluations]);
 
-  // Charger inscriptions quand modal création s'ouvre
-  useEffect(() => {
-    if (showModal && modalMode === "create") {
-      fetchInscriptions();
-      setInscriptionSearch("");
-      setForm((f) => ({ ...f, inscriptionId: "" }));
-    }
-  }, [showModal, modalMode]);
-
-  // Filtrer inscriptions selon recherche dans modal
+  // Filtrer inscriptions selon recherche
   useEffect(() => {
     if (!inscriptionSearch.trim()) {
       setFilteredInscriptions(inscriptions);
@@ -111,43 +108,80 @@ const GestionEvaluation = () => {
     }
   }, [inscriptionSearch, inscriptions]);
 
-  // Enregistrer évaluation (création/modification)
-  const saveEvaluation = async (evaluation, idToUpdate = null) => {
+  // Calcul automatique moyenne EC = noteControle * 0.3 + noteExamen * 0.7 si valides
+  const calcMoyenne = (noteControle, noteExamen) => {
+    const nc = parseFloat(noteControle);
+    const ne = parseFloat(noteExamen);
+    if (
+      isNaN(nc) ||
+      isNaN(ne) ||
+      nc < 0 ||
+      nc > 20 ||
+      ne < 0 ||
+      ne > 20
+    )
+      return "—";
+    return (nc * 0.3 + ne * 0.7).toFixed(2);
+  };
+
+  // Sauvegarder les évaluations créées depuis les nouvelles notes
+  const saveNewEvaluations = async () => {
+    const evaluationsToCreate = Object.entries(newNotes)
+      .map(([inscriptionId, notes]) => {
+        const idNum = parseInt(inscriptionId, 10);
+        const noteControleNum = parseFloat(notes.noteControle);
+        const noteExamenNum = parseFloat(notes.noteExamen);
+        if (
+          isNaN(noteControleNum) ||
+          noteControleNum < 0 ||
+          noteControleNum > 20 ||
+          isNaN(noteExamenNum) ||
+          noteExamenNum < 0 ||
+          noteExamenNum > 20
+        ) {
+          return null;
+        }
+        return {
+          noteControle: noteControleNum,
+          noteExamen: noteExamenNum,
+          inscription: { id: idNum },
+        };
+      })
+      .filter((ev) => ev !== null);
+
+    if (evaluationsToCreate.length === 0) {
+      alert("Veuillez saisir au moins une évaluation valide.");
+      return;
+    }
+
     setIsSubmitting(true);
     try {
-      const url = idToUpdate ? `${API_EVALUATIONS_URL}/${idToUpdate}` : API_EVALUATIONS_URL;
-      const method = idToUpdate ? "PUT" : "POST";
-      const res = await fetch(url, {
-        method,
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify(evaluation),
-      });
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({}));
-        throw new Error(errorData.message || `Erreur HTTP ${res.status}`);
+      for (const evaluation of evaluationsToCreate) {
+        const res = await fetch(API_EVALUATIONS_URL, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify(evaluation),
+        });
+        if (!res.ok) {
+          const errorData = await res.json().catch(() => ({}));
+          throw new Error(errorData.message || `Erreur HTTP ${res.status}`);
+        }
       }
-      const data = await res.json();
-
-      if (!idToUpdate) {
-        // Ajouter en tête
-        setEvaluations((prev) => [data, ...prev]);
-        setFilteredEvaluations((prev) => [data, ...prev]);
-      } else {
-        await fetchEvaluations();
-      }
-      setShowModal(false);
-      setSelectedIndex(null);
-    } catch (err) {
-      alert("Erreur lors de la sauvegarde : " + err.message);
+      await fetchEvaluations();
+      setNewNotes({});
+      setShowCreationTable(false); // masque la liste des inscriptions
+      alert("Évaluations créées avec succès !");
+    } catch (error) {
+      alert("Erreur lors de la sauvegarde : " + error.message);
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  // Supprimer évaluation
+  // Supprimer une évaluation existante
   const deleteEvaluation = async (id) => {
     if (!window.confirm("Confirmer la suppression ?")) return;
     setIsSubmitting(true);
@@ -159,6 +193,7 @@ const GestionEvaluation = () => {
       if (!res.ok) throw new Error(`Erreur HTTP ${res.status}`);
       await fetchEvaluations();
       setSelectedIndex(null);
+      alert("Évaluation supprimée avec succès !");
     } catch (err) {
       alert("Erreur lors de la suppression : " + err.message);
     } finally {
@@ -166,16 +201,29 @@ const GestionEvaluation = () => {
     }
   };
 
-  // Gestion soumission formulaire modal
-  const handleModalSubmit = (e) => {
-    e.preventDefault();
-    const inscriptionIdNum = parseInt(form.inscriptionId, 10);
-    if (isNaN(inscriptionIdNum) || inscriptionIdNum <= 0) {
-      alert("L'ID d'inscription doit être un nombre entier positif.");
-      return;
-    }
-    const noteControleNum = parseFloat(form.noteControle);
-    const noteExamenNum = parseFloat(form.noteExamen);
+  // Démarrer la modification inline d'une évaluation sélectionnée
+  const startEditEvaluation = (index) => {
+    const ev = filteredEvaluations[index];
+    setEditNotes({
+      noteControle: ev.noteControle != null ? ev.noteControle.toString() : "",
+      noteExamen: ev.noteExamen != null ? ev.noteExamen.toString() : "",
+    });
+    setEditIndex(index);
+    setSelectedIndex(index);
+  };
+
+  // Annuler la modification inline d'une évaluation
+  const cancelEdit = () => {
+    setEditIndex(null);
+    setEditNotes({ noteControle: "", noteExamen: "" });
+  };
+
+  // Valider et sauvegarder la modification inline
+  const saveEditEvaluation = async () => {
+    const idToUpdate = filteredEvaluations[editIndex].id;
+    const noteControleNum = parseFloat(editNotes.noteControle);
+    const noteExamenNum = parseFloat(editNotes.noteExamen);
+
     if (
       isNaN(noteControleNum) ||
       noteControleNum < 0 ||
@@ -187,34 +235,51 @@ const GestionEvaluation = () => {
       alert("Les notes doivent être comprises entre 0 et 20.");
       return;
     }
-    const evaluationToSend = {
-      noteControle: noteControleNum,
-      noteExamen: noteExamenNum,
-      inscription: { id: inscriptionIdNum },
-    };
-    if (modalMode === "create") saveEvaluation(evaluationToSend);
-    else if (modalMode === "edit") {
-      const idToUpdate = filteredEvaluations[selectedIndex].id;
-      saveEvaluation(evaluationToSend, idToUpdate);
+
+    setIsSubmitting(true);
+    try {
+      const res = await fetch(`${API_EVALUATIONS_URL}/${idToUpdate}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          noteControle: noteControleNum,
+          noteExamen: noteExamenNum,
+        }),
+      });
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.message || `Erreur HTTP ${res.status}`);
+      }
+      await fetchEvaluations();
+      alert("Évaluation modifiée avec succès !");
+      cancelEdit();
+    } catch (err) {
+      alert("Erreur lors de la modification : " + err.message);
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const handleCreate = () => {
-    setModalMode("create");
-    setForm({ noteControle: "", noteExamen: "", inscriptionId: "" });
-    setShowModal(true);
+  // Gérer la saisie inline des notes (création)
+  const handleNoteChange = (inscriptionId, field, value) => {
+    setNewNotes((prev) => ({
+      ...prev,
+      [inscriptionId]: {
+        ...prev[inscriptionId],
+        [field]: value,
+      },
+    }));
   };
 
-  const handleEdit = () => {
-    if (selectedIndex === null) return;
-    setModalMode("edit");
-    const ev = filteredEvaluations[selectedIndex];
-    setForm({
-      noteControle: ev.noteControle?.toString() || "",
-      noteExamen: ev.noteExamen?.toString() || "",
-      inscriptionId: ev.inscription.id,
-    });
-    setShowModal(true);
+  // Gérer la saisie inline lors de la modification d'une évaluation
+  const handleEditNoteChange = (field, value) => {
+    setEditNotes((prev) => ({
+      ...prev,
+      [field]: value,
+    }));
   };
 
   const tdStyle = { padding: 8, borderBottom: "1px solid #e5e7eb" };
@@ -228,7 +293,7 @@ const GestionEvaluation = () => {
         background: "white",
         borderRadius: 8,
         boxShadow: "0 2px 16px #e0e0e0",
-        position: "relative", // pour bouton navigation
+        position: "relative",
       }}
     >
       {/* Bouton de navigation vers DashboardAdmin en haut à gauche */}
@@ -271,54 +336,6 @@ const GestionEvaluation = () => {
         />
       </div>
 
-      <div style={{ display: "flex", justifyContent: "center", gap: 12, marginBottom: 15 }}>
-        <button
-          onClick={handleCreate}
-          disabled={isSubmitting}
-          style={{
-            padding: "10px 20px",
-            backgroundColor: "#2563eb",
-            color: "white",
-            border: "none",
-            borderRadius: 6,
-            cursor: "pointer",
-          }}
-          aria-label="Créer une nouvelle évaluation"
-        >
-          {isSubmitting && modalMode === "create" ? "En cours..." : "Créer évaluation"}
-        </button>
-        <button
-          onClick={handleEdit}
-          disabled={selectedIndex === null || isSubmitting}
-          style={{
-            padding: "10px 20px",
-            backgroundColor: "#10b981",
-            color: "white",
-            border: "none",
-            borderRadius: 6,
-            cursor: selectedIndex === null ? "not-allowed" : "pointer",
-          }}
-          aria-label="Modifier l'évaluation sélectionnée"
-        >
-          Modifier évaluation
-        </button>
-        <button
-          onClick={() => selectedIndex !== null && deleteEvaluation(filteredEvaluations[selectedIndex].id)}
-          disabled={selectedIndex === null || isSubmitting}
-          style={{
-            padding: "10px 20px",
-            backgroundColor: "#ef4444",
-            color: "white",
-            border: "none",
-            borderRadius: 6,
-            cursor: selectedIndex === null ? "not-allowed" : "pointer",
-          }}
-          aria-label="Supprimer l'évaluation sélectionnée"
-        >
-          Supprimer évaluation
-        </button>
-      </div>
-
       {filteredEvaluations.length === 0 ? (
         <p style={{ textAlign: "center", padding: 20, color: "#888" }}>
           Aucune évaluation créée pour le moment.
@@ -336,16 +353,16 @@ const GestionEvaluation = () => {
               <th style={{ padding: 8, borderBottom: "2px solid #e5e7eb" }}>Note contrôle</th>
               <th style={{ padding: 8, borderBottom: "2px solid #e5e7eb" }}>Note examen</th>
               <th style={{ padding: 8, borderBottom: "2px solid #e5e7eb" }}>Moyenne EC</th>
+              <th style={{ padding: 8, borderBottom: "2px solid #e5e7eb" }}>Actions</th>
             </tr>
           </thead>
           <tbody>
             {filteredEvaluations.map((ev, index) => (
               <tr
                 key={ev.id}
-                onClick={() => setSelectedIndex(index)}
                 style={{
-                  backgroundColor: selectedIndex === index ? "#e0f2fe" : index % 2 === 0 ? "#f8fafc" : "white",
-                  cursor: "pointer",
+                  backgroundColor:
+                    selectedIndex === index ? "#e0f2fe" : index % 2 === 0 ? "#f8fafc" : "white",
                 }}
                 tabIndex={0}
                 aria-selected={selectedIndex === index}
@@ -357,3302 +374,236 @@ const GestionEvaluation = () => {
                 <td style={tdStyle}>{ev.inscription?.ec?.ue?.codeUE || "—"}</td>
                 <td style={tdStyle}>{ev.inscription?.ec?.codeEC || "—"}</td>
                 <td style={tdStyle}>{ev.inscription?.anneeInscription || "—"}</td>
-                <td style={tdStyle}>{ev.noteControle != null ? ev.noteControle : "—"}</td>
-                <td style={tdStyle}>{ev.noteExamen != null ? ev.noteExamen : "—"}</td>
-                <td style={tdStyle}>
-                  {ev.inscription?.moyenne != null ? Number(ev.inscription.moyenne).toFixed(2) : "—"}
-                </td>
+
+                {editIndex === index ? (
+                  <>
+                    <td style={tdStyle}>
+                      <input
+                        type="number"
+                        min="0"
+                        max="20"
+                        step="0.01"
+                        value={editNotes.noteControle}
+                        onChange={(e) => handleEditNoteChange("noteControle", e.target.value)}
+                        disabled={isSubmitting}
+                        style={{ width: 80, padding: 4, fontSize: 14, borderRadius: 4 }}
+                        aria-label="Modifier note contrôle"
+                      />
+                    </td>
+                    <td style={tdStyle}>
+                      <input
+                        type="number"
+                        min="0"
+                        max="20"
+                        step="0.01"
+                        value={editNotes.noteExamen}
+                        onChange={(e) => handleEditNoteChange("noteExamen", e.target.value)}
+                        disabled={isSubmitting}
+                        style={{ width: 80, padding: 4, fontSize: 14, borderRadius: 4 }}
+                        aria-label="Modifier note examen"
+                      />
+                    </td>
+                    <td style={tdStyle}>{calcMoyenne(editNotes.noteControle, editNotes.noteExamen)}</td>
+                    <td style={tdStyle}>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "start" }}>
+                        <button
+                          onClick={saveEditEvaluation}
+                          disabled={isSubmitting}
+                          style={{
+                            padding: "8px 20px",
+                            backgroundColor: "#10b981",
+                            color: "white",
+                            border: "none",
+                            borderRadius: 8,
+                            cursor: "pointer",
+                            fontWeight: "600",
+                            fontSize: 14,
+                            width: "100%",
+                          }}
+                          aria-label="Enregistrer la modification"
+                        >
+                          Enregistrer
+                        </button>
+                        <button
+                          onClick={cancelEdit}
+                          disabled={isSubmitting}
+                          style={{
+                            padding: "8px 20px",
+                            backgroundColor: "#ef4444",
+                            color: "white",
+                            border: "none",
+                            borderRadius: 8,
+                            cursor: "pointer",
+                            fontWeight: "600",
+                            fontSize: 14,
+                            width: "100%",
+                          }}
+                          aria-label="Annuler la modification"
+                        >
+                          Annuler
+                        </button>
+                      </div>
+                    </td>
+                  </>
+                ) : (
+                  <>
+                    <td style={tdStyle}>{ev.noteControle != null ? ev.noteControle : "—"}</td>
+                    <td style={tdStyle}>{ev.noteExamen != null ? ev.noteExamen : "—"}</td>
+                    <td style={tdStyle}>{calcMoyenne(ev.noteControle, ev.noteExamen)}</td>
+                    <td style={tdStyle}>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "start" }}>
+                        <button
+                          onClick={() => startEditEvaluation(index)}
+                          disabled={isSubmitting}
+                          style={{
+                            padding: "8px 20px",
+                            backgroundColor: "#10b981",
+                            color: "white",
+                            border: "none",
+                            borderRadius: 8,
+                            cursor: "pointer",
+                            fontWeight: "600",
+                            fontSize: 14,
+                            width: "100%",
+                          }}
+                          aria-label="Modifier cette évaluation"
+                        >
+                          Modifier
+                        </button>
+                        <button
+                          onClick={() => deleteEvaluation(ev.id)}
+                          disabled={isSubmitting}
+                          style={{
+                            padding: "8px 20px",
+                            backgroundColor: "#ef4444",
+                            color: "white",
+                            border: "none",
+                            borderRadius: 8,
+                            cursor: "pointer",
+                            fontWeight: "600",
+                            fontSize: 14,
+                            width: "100%",
+                          }}
+                          aria-label="Supprimer cette évaluation"
+                        >
+                          Supprimer
+                        </button>
+                      </div>
+                    </td>
+                  </>
+                )}
               </tr>
             ))}
           </tbody>
         </table>
       )}
 
-      {/* Modal création/modification évaluation */}
-      {showModal && (
-        <div
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            width: "100vw",
-            height: "100vh",
-            backgroundColor: "rgba(0,0,0,0.3)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 100,
-          }}
-          role="dialog"
-          aria-modal="true"
-          aria-labelledby="modalTitle"
-        >
-          <div
-            style={{
-              backgroundColor: "white",
-              padding: 30,
-              borderRadius: 10,
-              width: 400,
-              boxShadow: "0 2px 15px rgba(0,0,0,0.2)",
-            }}
-          >
-            <h3 id="modalTitle">{modalMode === "create" ? "Créer une évaluation" : "Modifier une évaluation"}</h3>
-            <form onSubmit={handleModalSubmit}>
-              {modalMode === "create" && (
-                <>
-                  <label htmlFor="searchInscription">Rechercher une inscription</label>
-                  <input
-                    id="searchInscription"
-                    type="text"
-                    placeholder="Recherche par INE, nom, UE, EC"
-                    value={inscriptionSearch}
-                    onChange={(e) => setInscriptionSearch(e.target.value)}
-                    disabled={isSubmitting}
-                    style={{ width: "100%", marginBottom: 10, padding: 8 }}
-                    autoFocus
-                  />
-                  <div
-                    style={{
-                      maxHeight: 150,
-                      overflowY: "auto",
-                      border: "1px solid #ccc",
-                      marginBottom: 15,
-                    }}
-                  >
-                    {filteredInscriptions.length === 0 ? (
-                      <p style={{ padding: 8, color: "#888" }}>Aucune inscription trouvée.</p>
-                    ) : (
-                      filteredInscriptions.map((insc) => (
-                        <div
-                          key={insc.id}
-                          onClick={() => !isSubmitting && setForm((f) => ({ ...f, inscriptionId: insc.id }))}
-                          style={{
-                            padding: "8px 12px",
-                            cursor: isSubmitting ? "default" : "pointer",
-                            backgroundColor: form.inscriptionId === insc.id ? "#d1fae5" : "transparent",
-                            userSelect: "none",
-                          }}
-                          tabIndex={0}
-                          role="button"
-                          aria-pressed={form.inscriptionId === insc.id}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter" || e.key === " ") {
-                              e.preventDefault();
-                              !isSubmitting && setForm((f) => ({ ...f, inscriptionId: insc.id }));
-                            }
-                          }}
-                        >
-                          <strong>{insc.etudiant?.matricule}</strong> - {insc.etudiant?.nom} {insc.etudiant?.prenom} | UE:{" "}
-                          {insc.ec?.ue?.codeUE || "—"} | EC: {insc.ec?.codeEC || "—"} | Année: {insc.anneeInscription}
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </>
-              )}
+      {showCreationTable && (
+        <>
+          <h2 style={{ textAlign: "center", margin: "40px 0 20px" }}>
+            Création d'évaluations - Liste des inscriptions
+          </h2>
 
-              <label htmlFor="noteControle">Note contrôle</label>
-              <input
-                id="noteControle"
-                type="number"
-                step="0.01"
-                min="0"
-                max="20"
-                required
-                value={form.noteControle}
-                onChange={(e) => setForm((f) => ({ ...f, noteControle: e.target.value }))}
-                disabled={isSubmitting}
-                autoFocus={modalMode === "edit"}
-                style={{ width: "100%", marginBottom: 15, padding: 8 }}
-              />
-
-              <label htmlFor="noteExamen">Note examen</label>
-              <input
-                id="noteExamen"
-                type="number"
-                step="0.01"
-                min="0"
-                max="20"
-                required
-                value={form.noteExamen}
-                onChange={(e) => setForm((f) => ({ ...f, noteExamen: e.target.value }))}
-                disabled={isSubmitting}
-                style={{ width: "100%", marginBottom: 15, padding: 8 }}
-              />
-
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
-                <button
-                  type="button"
-                  onClick={() => setShowModal(false)}
-                  disabled={isSubmitting}
-                  style={{ padding: "8px 16px" }}
-                >
-                  Annuler
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  style={{ padding: "8px 16px", backgroundColor: "#10b981", color: "white" }}
-                >
-                  {isSubmitting ? "En cours..." : modalMode === "create" ? "Créer" : "Enregistrer"}
-                </button>
-              </div>
-            </form>
+          <div style={{ marginBottom: 15, textAlign: "center" }}>
+            <input
+              type="text"
+              placeholder="Filtrer les inscriptions (INE, nom, UE, EC...)"
+              value={inscriptionSearch}
+              onChange={(e) => setInscriptionSearch(e.target.value)}
+              disabled={isSubmitting}
+              style={{ padding: 8, fontSize: 16, width: 400, borderRadius: 6, border: "1px solid #ccc" }}
+              aria-label="Filtrer les inscriptions"
+            />
           </div>
-        </div>
+
+          {filteredInscriptions.length === 0 ? (
+            <p style={{ textAlign: "center", padding: 20, color: "#888" }}>
+              Aucune inscription trouvée.
+            </p>
+          ) : (
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr style={{ backgroundColor: "#f1f5f9" }}>
+                  <th style={{ padding: 8, borderBottom: "2px solid #e5e7eb" }}>Matricule</th>
+                  <th style={{ padding: 8, borderBottom: "2px solid #e5e7eb" }}>Nom</th>
+                  <th style={{ padding: 8, borderBottom: "2px solid #e5e7eb" }}>Prénom</th>
+                  <th style={tdStyle}>Code UE</th>
+                  <th style={tdStyle}>Code EC</th>
+                  <th style={{ padding: 8, borderBottom: "2px solid #e5e7eb" }}>Année</th>
+                  <th style={{ padding: 8, borderBottom: "2px solid #e5e7eb" }}>Note contrôle</th>
+                  <th style={{ padding: 8, borderBottom: "2px solid #e5e7eb" }}>Note examen</th>
+                  <th style={{ padding: 8, borderBottom: "2px solid #e5e7eb" }}>Moyenne EC</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredInscriptions.map((insc) => {
+                  const notes = newNotes[insc.id] || { noteControle: "", noteExamen: "" };
+                  return (
+                    <tr key={insc.id}>
+                      <td style={tdStyle}>{insc.etudiant?.matricule || "—"}</td>
+                      <td style={tdStyle}>{insc.etudiant?.nom || "—"}</td>
+                      <td style={tdStyle}>{insc.etudiant?.prenom || "—"}</td>
+                      <td style={tdStyle}>{insc.ec?.ue?.codeUE || "—"}</td>
+                      <td style={tdStyle}>{insc.ec?.codeEC || "—"}</td>
+                      <td style={tdStyle}>{insc.anneeInscription || "—"}</td>
+
+                      <td style={tdStyle}>
+                        <input
+                          type="number"
+                          min="0"
+                          max="20"
+                          step="0.01"
+                          placeholder="0-20"
+                          value={notes.noteControle}
+                          onChange={(e) => handleNoteChange(insc.id, "noteControle", e.target.value)}
+                          disabled={isSubmitting}
+                          style={{ width: "80px", padding: 4, fontSize: 14, borderRadius: 4 }}
+                          aria-label={`Note contrôle pour ${insc.etudiant?.matricule}`}
+                        />
+                      </td>
+                      <td style={tdStyle}>
+                        <input
+                          type="number"
+                          min="0"
+                          max="20"
+                          step="0.01"
+                          placeholder="0-20"
+                          value={notes.noteExamen}
+                          onChange={(e) => handleNoteChange(insc.id, "noteExamen", e.target.value)}
+                          disabled={isSubmitting}
+                          style={{ width: "80px", padding: 4, fontSize: 14, borderRadius: 4 }}
+                          aria-label={`Note examen pour ${insc.etudiant?.matricule}`}
+                        />
+                      </td>
+                      <td style={tdStyle}>{calcMoyenne(notes.noteControle, notes.noteExamen)}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+
+          <div style={{ marginTop: 20, textAlign: "right" }}>
+            <button
+              onClick={saveNewEvaluations}
+              disabled={isSubmitting}
+              style={{
+                padding: "10px 25px",
+                backgroundColor: "#2563eb",
+                color: "white",
+                border: "none",
+                borderRadius: 6,
+                cursor: "pointer",
+              }}
+              aria-label="Enregistrer les nouvelles évaluations"
+            >
+              {isSubmitting ? "En cours..." : "Enregistrer les évaluations"}
+            </button>
+          </div>
+        </>
       )}
     </div>
   );
 };
 
 export default GestionEvaluation;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// import React, { useState, useEffect } from "react";
-
-// const API_EVALUATIONS_URL = "http://localhost:8080/api/evaluations";
-// const API_INSCRIPTIONS_URL = "http://localhost:8080/api/inscriptions";
-
-// const GestionEvaluation = () => {
-//   const [evaluations, setEvaluations] = useState([]);
-//   const [filteredEvaluations, setFilteredEvaluations] = useState([]);
-//   const [searchIne, setSearchIne] = useState("");
-//   const [selectedIndex, setSelectedIndex] = useState(null);
-
-//   const [showModal, setShowModal] = useState(false);
-//   const [modalMode, setModalMode] = useState("create"); // 'create' or 'edit'
-//   const [form, setForm] = useState({
-//     noteControle: "",
-//     noteExamen: "",
-//     inscriptionId: "",
-//   });
-//   const [isSubmitting, setIsSubmitting] = useState(false);
-
-//   const [inscriptions, setInscriptions] = useState([]);
-//   const [inscriptionSearch, setInscriptionSearch] = useState("");
-//   const [filteredInscriptions, setFilteredInscriptions] = useState([]);
-
-//   const token = sessionStorage.getItem("token");
-
-//   // Charger toutes les évaluations
-//   const fetchEvaluations = async () => {
-//     try {
-//       const res = await fetch(API_EVALUATIONS_URL, {
-//         headers: { Authorization: `Bearer ${token}` },
-//       });
-//       if (!res.ok) throw new Error(`Erreur ${res.status}`);
-//       const data = await res.json();
-//       setEvaluations(data);
-//     } catch (error) {
-//       console.error("Erreur fetchEvaluations:", error);
-//       setEvaluations([]);
-//     }
-//   };
-
-//   // Charger les inscriptions depuis l'API
-//   const fetchInscriptions = async () => {
-//     try {
-//       const res = await fetch(API_INSCRIPTIONS_URL, {
-//         headers: { Authorization: `Bearer ${token}` },
-//       });
-//       if (!res.ok) throw new Error(`Erreur ${res.status}`);
-//       const data = await res.json();
-//       setInscriptions(data);
-//       setFilteredInscriptions(data);
-//     } catch (error) {
-//       console.error("Erreur chargement inscriptions:", error);
-//       setInscriptions([]);
-//       setFilteredInscriptions([]);
-//     }
-//   };
-
-//   useEffect(() => {
-//     fetchEvaluations();
-//   }, []);
-
-//   // Filtrer évaluations selon INE recherché
-//   useEffect(() => {
-//     if (!searchIne) {
-//       setFilteredEvaluations(evaluations);
-//     } else {
-//       const searchLower = searchIne.toLowerCase();
-//       setFilteredEvaluations(
-//         evaluations.filter(
-//           (ev) =>
-//             ev.inscription?.etudiant?.matricule
-//               ?.toLowerCase()
-//               .includes(searchLower)
-//         )
-//       );
-//     }
-//   }, [searchIne, evaluations]);
-
-//   // Charger inscriptions à l'ouverture modal création
-//   useEffect(() => {
-//     if (showModal && modalMode === "create") {
-//       fetchInscriptions();
-//       setInscriptionSearch("");
-//       setForm((f) => ({ ...f, inscriptionId: "" }));
-//     }
-//   }, [showModal, modalMode]);
-
-//   // Filtrer inscriptions selon recherche
-//   useEffect(() => {
-//     if (!inscriptionSearch) {
-//       setFilteredInscriptions(inscriptions);
-//     } else {
-//       const lower = inscriptionSearch.toLowerCase();
-//       setFilteredInscriptions(
-//         inscriptions.filter((insc) => {
-//           const etu = insc.etudiant || {};
-//           const ec = insc.ec || {};
-//           const ue = ec.ue || {};
-//           return (
-//             etu.matricule?.toLowerCase().includes(lower) ||
-//             etu.nom?.toLowerCase().includes(lower) ||
-//             etu.prenom?.toLowerCase().includes(lower) ||
-//             ec.intitule?.toLowerCase().includes(lower) ||
-//             ue.intitule?.toLowerCase().includes(lower) ||
-//             insc.anneeInscription?.toString().includes(lower)
-//           );
-//         })
-//       );
-//     }
-//   }, [inscriptionSearch, inscriptions]);
-
-//   // Enregistrer évaluation (création/modification)
-//   const saveEvaluation = async (evaluation, idToUpdate = null) => {
-//     setIsSubmitting(true);
-//     try {
-//       const url = idToUpdate ? `${API_EVALUATIONS_URL}/${idToUpdate}` : API_EVALUATIONS_URL;
-//       const method = idToUpdate ? "PUT" : "POST";
-//       const res = await fetch(url, {
-//         method,
-//         headers: {
-//           "Content-Type": "application/json",
-//           Authorization: `Bearer ${token}`,
-//         },
-//         body: JSON.stringify(evaluation),
-//       });
-//       if (!res.ok) {
-//         const errorData = await res.json().catch(() => ({}));
-//         const message = errorData.message || `Erreur ${res.status}`;
-//         throw new Error(message);
-//       }
-//       const data = await res.json(); // récupération de la nouvelle évaluation créée ou mise à jour
-
-//       if (!idToUpdate) {
-//         // Création : insérer la nouvelle évaluation en tête des listes locales
-//         setEvaluations((prev) => [data, ...prev]);
-//         setFilteredEvaluations((prev) => [data, ...prev]);
-//       } else {
-//         // Modification : rafraîchir toute la liste
-//         await fetchEvaluations();
-//       }
-
-//       setShowModal(false);
-//       setSelectedIndex(null);
-//     } catch (err) {
-//       alert("Erreur lors de la sauvegarde : " + err.message);
-//     } finally {
-//       setIsSubmitting(false);
-//     }
-//   };
-
-//   // Supprimer une évaluation
-//   const deleteEvaluation = async (id) => {
-//     if (!window.confirm("Confirmer la suppression ?")) return;
-//     setIsSubmitting(true);
-//     try {
-//       const res = await fetch(`${API_EVALUATIONS_URL}/${id}`, {
-//         method: "DELETE",
-//         headers: { Authorization: `Bearer ${token}` },
-//       });
-//       if (!res.ok) throw new Error(`Erreur ${res.status}`);
-//       await fetchEvaluations();
-//       setSelectedIndex(null);
-//     } catch (err) {
-//       alert("Erreur lors de la suppression : " + err.message);
-//     } finally {
-//       setIsSubmitting(false);
-//     }
-//   };
-
-//   // Soumission du formulaire modal
-//   const handleModalSubmit = (e) => {
-//     e.preventDefault();
-//     const inscriptionIdNum = parseInt(form.inscriptionId, 10);
-//     if (isNaN(inscriptionIdNum) || inscriptionIdNum <= 0) {
-//       alert("L'ID d'inscription doit être un nombre entier positif.");
-//       return;
-//     }
-//     const noteControleNum = parseFloat(form.noteControle);
-//     const noteExamenNum = parseFloat(form.noteExamen);
-//     if (
-//       isNaN(noteControleNum) ||
-//       noteControleNum < 0 ||
-//       noteControleNum > 20 ||
-//       isNaN(noteExamenNum) ||
-//       noteExamenNum < 0 ||
-//       noteExamenNum > 20
-//     ) {
-//       alert("Les notes doivent être comprises entre 0 et 20.");
-//       return;
-//     }
-//     const evaluationToSend = {
-//       noteControle: noteControleNum,
-//       noteExamen: noteExamenNum,
-//       inscription: { id: inscriptionIdNum },
-//     };
-//     if (modalMode === "create") saveEvaluation(evaluationToSend);
-//     else if (modalMode === "edit") {
-//       const idToUpdate = filteredEvaluations[selectedIndex].id;
-//       saveEvaluation(evaluationToSend, idToUpdate);
-//     }
-//   };
-
-//   // Ouvrir modal création
-//   const handleCreate = () => {
-//     setModalMode("create");
-//     setForm({ noteControle: "", noteExamen: "", inscriptionId: "" });
-//     setShowModal(true);
-//   };
-
-//   // Ouvrir modal modification
-//   const handleEdit = () => {
-//     if (selectedIndex === null) return;
-//     setModalMode("edit");
-//     const ev = filteredEvaluations[selectedIndex];
-//     setForm({
-//       noteControle: ev.noteControle?.toString() || "",
-//       noteExamen: ev.noteExamen?.toString() || "",
-//       inscriptionId: ev.inscription.id,
-//     });
-//     setShowModal(true);
-//   };
-
-//   const tdStyle = { padding: 8, borderBottom: "1px solid #e5e7eb" };
-
-//   return (
-//     <div
-//       style={{
-//         maxWidth: 1100,
-//         margin: "40px auto",
-//         padding: 20,
-//         background: "white",
-//         borderRadius: 8,
-//         boxShadow: "0 2px 16px #e0e0e0",
-//       }}
-//     >
-//       <h2 style={{ textAlign: "center", marginBottom: 30 }}>Liste des évaluations</h2>
-
-//       <div style={{ marginBottom: 15, textAlign: "center" }}>
-//         <input
-//           type="text"
-//           placeholder="Rechercher par Matricule"
-//           value={searchIne}
-//           onChange={(e) => setSearchIne(e.target.value)}
-//           disabled={isSubmitting}
-//           style={{ padding: 8, fontSize: 16, width: 280, borderRadius: 6, border: "1px solid #ccc" }}
-//         />
-//       </div>
-
-//       <div style={{ display: "flex", justifyContent: "center", gap: 12, marginBottom: 15 }}>
-//         <button
-//           onClick={handleCreate}
-//           disabled={isSubmitting}
-//           style={{
-//             padding: "10px 20px",
-//             backgroundColor: "#2563eb",
-//             color: "white",
-//             border: "none",
-//             borderRadius: 6,
-//             cursor: "pointer",
-//           }}
-//         >
-//           {isSubmitting && modalMode === "create" ? "En cours..." : "Créer évaluation"}
-//         </button>
-//         <button
-//           onClick={handleEdit}
-//           disabled={selectedIndex === null || isSubmitting}
-//           style={{
-//             padding: "10px 20px",
-//             backgroundColor: "#10b981",
-//             color: "white",
-//             border: "none",
-//             borderRadius: 6,
-//             cursor: selectedIndex === null ? "not-allowed" : "pointer",
-//           }}
-//         >
-//           Modifier évaluation
-//         </button>
-//         <button
-//           onClick={() => selectedIndex !== null && deleteEvaluation(filteredEvaluations[selectedIndex].id)}
-//           disabled={selectedIndex === null || isSubmitting}
-//           style={{
-//             padding: "10px 20px",
-//             backgroundColor: "#ef4444",
-//             color: "white",
-//             border: "none",
-//             borderRadius: 6,
-//             cursor: selectedIndex === null ? "not-allowed" : "pointer",
-//           }}
-//         >
-//           Supprimer évaluation
-//         </button>
-//       </div>
-
-//       {filteredEvaluations.length === 0 ? (
-//         <p style={{ textAlign: "center", padding: 20, color: "#888" }}>
-//           Aucune évaluation créée pour le moment.
-//         </p>
-//       ) : (
-//         <table style={{ width: "100%", borderCollapse: "collapse" }}>
-//           <thead>
-//             <tr style={{ backgroundColor: "#f1f5f9" }}>
-//               <th style={{ padding: 8, borderBottom: "2px solid #e5e7eb" }}>Matricule</th>
-//               <th style={{ padding: 8, borderBottom: "2px solid #e5e7eb" }}>Nom</th>
-//               <th style={{ padding: 8, borderBottom: "2px solid #e5e7eb" }}>Prénom</th>
-//               <th style={tdStyle}>Code UE</th>
-//               <th style={tdStyle}>Code EC</th>
-//               <th style={{ padding: 8, borderBottom: "2px solid #e5e7eb" }}>Année</th>
-//               <th style={{ padding: 8, borderBottom: "2px solid #e5e7eb" }}>Note contrôle</th>
-//               <th style={{ padding: 8, borderBottom: "2px solid #e5e7eb" }}>Note examen</th>
-//               <th style={{ padding: 8, borderBottom: "2px solid #e5e7eb" }}>Moyenne EC</th>
-//             </tr>
-//           </thead>
-//           <tbody>
-//             {filteredEvaluations.map((ev, index) => (
-//               <tr
-//                 key={ev.id}
-//                 onClick={() => setSelectedIndex(index)}
-//                 style={{
-//                   backgroundColor: selectedIndex === index ? "#e0f2fe" : index % 2 === 0 ? "#f8fafc" : "white",
-//                   cursor: "pointer",
-//                 }}
-//               >
-//                 <td style={tdStyle}>{ev.inscription?.etudiant?.matricule || "—"}</td>
-//                 <td style={tdStyle}>{ev.inscription?.etudiant?.nom || "—"}</td>
-//                 <td style={tdStyle}>{ev.inscription?.etudiant?.prenom || "—"}</td>
-//                 <td style={tdStyle}>{ev.inscription?.ec?.ue?.codeUE || "—"}</td>
-//                 <td style={tdStyle}>{ev.inscription?.ec?.codeEC || "—"}</td>
-//                 <td style={tdStyle}>{ev.inscription?.anneeInscription || "—"}</td>
-//                 <td style={tdStyle}>{ev.noteControle != null ? ev.noteControle : "—"}</td>
-//                 <td style={tdStyle}>{ev.noteExamen != null ? ev.noteExamen : "—"}</td>
-//                 <td style={tdStyle}>
-//                   {ev.inscription?.moyenne != null ? Number(ev.inscription.moyenne).toFixed(2) : "—"}
-//                 </td>
-//               </tr>
-//             ))}
-//           </tbody>
-//         </table>
-//       )}
-
-//       {showModal && (
-//         <div
-//           style={{
-//             position: "fixed",
-//             top: 0,
-//             left: 0,
-//             width: "100vw",
-//             height: "100vh",
-//             backgroundColor: "rgba(0,0,0,0.3)",
-//             display: "flex",
-//             alignItems: "center",
-//             justifyContent: "center",
-//             zIndex: 100,
-//           }}
-//         >
-//           <div
-//             style={{
-//               backgroundColor: "white",
-//               padding: 30,
-//               borderRadius: 10,
-//               width: 400,
-//               boxShadow: "0 2px 15px rgba(0,0,0,0.2)",
-//             }}
-//           >
-//             <h3>{modalMode === "create" ? "Créer une évaluation" : "Modifier une évaluation"}</h3>
-//             <form onSubmit={handleModalSubmit}>
-//               {modalMode === "create" && (
-//                 <>
-//                   <label>Rechercher une inscription</label>
-//                   <input
-//                     type="text"
-//                     placeholder="Recherche par INE, nom, UE, EC"
-//                     value={inscriptionSearch}
-//                     onChange={(e) => setInscriptionSearch(e.target.value)}
-//                     disabled={isSubmitting}
-//                     style={{ width: "100%", marginBottom: 10, padding: 8 }}
-//                     autoFocus
-//                   />
-//                   <div style={{ maxHeight: 150, overflowY: "auto", border: "1px solid #ccc", marginBottom: 15 }}>
-//                     {filteredInscriptions.length === 0 ? (
-//                       <p style={{ padding: 8, color: "#888" }}>Aucune inscription trouvée.</p>
-//                     ) : (
-//                       filteredInscriptions.map((insc) => (
-//                         <div
-//                           key={insc.id}
-//                           onClick={() => !isSubmitting && setForm((f) => ({ ...f, inscriptionId: insc.id }))}
-//                           style={{
-//                             padding: "8px 12px",
-//                             cursor: isSubmitting ? "default" : "pointer",
-//                             backgroundColor: form.inscriptionId === insc.id ? "#d1fae5" : "transparent",
-//                             userSelect: "none",
-//                           }}
-//                         >
-//                           <strong>{insc.etudiant?.matricule}</strong> - {insc.etudiant?.nom} {insc.etudiant?.prenom} | UE:{" "}
-//                           {insc.ec?.ue?.codeUE || "—"} | EC: {insc.ec?.codeEC || "—"} | Année: {insc.anneeInscription}
-//                         </div>
-//                       ))
-//                     )}
-//                   </div>
-//                 </>
-//               )}
-
-//               <label>Note contrôle</label>
-//               <input
-//                 type="number"
-//                 step="0.01"
-//                 min="0"
-//                 max="20"
-//                 required
-//                 value={form.noteControle}
-//                 onChange={(e) => setForm((f) => ({ ...f, noteControle: e.target.value }))}
-//                 disabled={isSubmitting}
-//                 autoFocus={modalMode === "edit"}
-//                 style={{ width: "100%", marginBottom: 15, padding: 8 }}
-//               />
-
-//               <label>Note examen</label>
-//               <input
-//                 type="number"
-//                 step="0.01"
-//                 min="0"
-//                 max="20"
-//                 required
-//                 value={form.noteExamen}
-//                 onChange={(e) => setForm((f) => ({ ...f, noteExamen: e.target.value }))}
-//                 disabled={isSubmitting}
-//                 style={{ width: "100%", marginBottom: 15, padding: 8 }}
-//               />
-
-//               <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
-//                 <button
-//                   type="button"
-//                   onClick={() => setShowModal(false)}
-//                   disabled={isSubmitting}
-//                   style={{ padding: "8px 16px" }}
-//                 >
-//                   Annuler
-//                 </button>
-//                 <button
-//                   type="submit"
-//                   disabled={isSubmitting}
-//                   style={{ padding: "8px 16px", backgroundColor: "#10b981", color: "white" }}
-//                 >
-//                   {isSubmitting ? "En cours..." : modalMode === "create" ? "Créer" : "Enregistrer"}
-//                 </button>
-//               </div>
-//             </form>
-//           </div>
-//         </div>
-//       )}
-//     </div>
-//   );
-// };
-
-// export default GestionEvaluation;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// import React, { useState, useEffect } from "react";
-
-// const API_EVALUATIONS_URL = "http://localhost:8080/api/evaluations";
-// const API_INSCRIPTIONS_URL = "http://localhost:8080/api/inscriptions";
-
-// const GestionEvaluation = () => {
-//   const [evaluations, setEvaluations] = useState([]);
-//   const [filteredEvaluations, setFilteredEvaluations] = useState([]);
-//   const [searchIne, setSearchIne] = useState("");
-//   const [selectedIndex, setSelectedIndex] = useState(null);
-
-//   const [showModal, setShowModal] = useState(false);
-//   const [modalMode, setModalMode] = useState("create"); // 'create' or 'edit'
-//   const [form, setForm] = useState({
-//     noteControle: "",
-//     noteExamen: "",
-//     inscriptionId: "",
-//   });
-//   const [isSubmitting, setIsSubmitting] = useState(false);
-
-//   const [inscriptions, setInscriptions] = useState([]);
-//   const [inscriptionSearch, setInscriptionSearch] = useState("");
-//   const [filteredInscriptions, setFilteredInscriptions] = useState([]);
-
-//   const token = sessionStorage.getItem("token");
-
-//   // Charger toutes les évaluations
-//   const fetchEvaluations = async () => {
-//     try {
-//       const res = await fetch(API_EVALUATIONS_URL, {
-//         headers: { Authorization: `Bearer ${token}` },
-//       });
-//       if (!res.ok) throw new Error(`Erreur ${res.status}`);
-//       const data = await res.json();
-//       setEvaluations(data);
-//     } catch (error) {
-//       console.error("Erreur fetchEvaluations:", error);
-//       setEvaluations([]);
-//     }
-//   };
-
-//   // Charger les inscriptions depuis l'API
-//   const fetchInscriptions = async () => {
-//     try {
-//       const res = await fetch(API_INSCRIPTIONS_URL, {
-//         headers: { Authorization: `Bearer ${token}` },
-//       });
-//       if (!res.ok) throw new Error(`Erreur ${res.status}`);
-//       const data = await res.json();
-//       setInscriptions(data);
-//       setFilteredInscriptions(data);
-//     } catch (error) {
-//       console.error("Erreur chargement inscriptions:", error);
-//       setInscriptions([]);
-//       setFilteredInscriptions([]);
-//     }
-//   };
-
-//   useEffect(() => {
-//     fetchEvaluations();
-//   }, []);
-
-//   // Filtrer évaluations selon INE recherché
-//   useEffect(() => {
-//     if (!searchIne) {
-//       setFilteredEvaluations(evaluations);
-//     } else {
-//       const searchLower = searchIne.toLowerCase();
-//       setFilteredEvaluations(
-//         evaluations.filter(
-//           (ev) =>
-//             ev.inscription?.etudiant?.matricule
-//               ?.toLowerCase()
-//               .includes(searchLower)
-//         )
-//       );
-//     }
-//   }, [searchIne, evaluations]);
-
-//   // Charger inscriptions à l'ouverture modal création
-//   useEffect(() => {
-//     if (showModal && modalMode === "create") {
-//       fetchInscriptions();
-//       setInscriptionSearch("");
-//       setForm((f) => ({ ...f, inscriptionId: "" }));
-//     }
-//   }, [showModal, modalMode]);
-
-//   // Filtrer inscriptions selon recherche
-//   useEffect(() => {
-//     if (!inscriptionSearch) {
-//       setFilteredInscriptions(inscriptions);
-//     } else {
-//       const lower = inscriptionSearch.toLowerCase();
-//       setFilteredInscriptions(
-//         inscriptions.filter((insc) => {
-//           const etu = insc.etudiant || {};
-//           const ec = insc.ec || {};
-//           const ue = ec.ue || {};
-//           return (
-//             etu.matricule?.toLowerCase().includes(lower) ||
-//             etu.nom?.toLowerCase().includes(lower) ||
-//             etu.prenom?.toLowerCase().includes(lower) ||
-//             ec.intitule?.toLowerCase().includes(lower) ||
-//             ue.intitule?.toLowerCase().includes(lower) ||
-//             insc.anneeInscription?.toString().includes(lower)
-//           );
-//         })
-//       );
-//     }
-//   }, [inscriptionSearch, inscriptions]);
-
-//   // Enregistrer évaluation (création/modification)
-//   const saveEvaluation = async (evaluation, idToUpdate = null) => {
-//     setIsSubmitting(true);
-//     try {
-//       const url = idToUpdate ? `${API_EVALUATIONS_URL}/${idToUpdate}` : API_EVALUATIONS_URL;
-//       const method = idToUpdate ? "PUT" : "POST";
-//       const res = await fetch(url, {
-//         method,
-//         headers: {
-//           "Content-Type": "application/json",
-//           Authorization: `Bearer ${token}`,
-//         },
-//         body: JSON.stringify(evaluation),
-//       });
-//       if (!res.ok) {
-//         const errorData = await res.json().catch(() => ({}));
-//         const message = errorData.message || `Erreur ${res.status}`;
-//         throw new Error(message);
-//       }
-//       await new Promise((r) => setTimeout(r, 300));
-//       await fetchEvaluations();
-//       setShowModal(false);
-//       setSelectedIndex(null);
-//     } catch (err) {
-//       alert("Erreur lors de la sauvegarde : " + err.message);
-//     } finally {
-//       setIsSubmitting(false);
-//     }
-//   };
-
-//   // Supprimer une évaluation
-//   const deleteEvaluation = async (id) => {
-//     if (!window.confirm("Confirmer la suppression ?")) return;
-//     setIsSubmitting(true);
-//     try {
-//       const res = await fetch(`${API_EVALUATIONS_URL}/${id}`, {
-//         method: "DELETE",
-//         headers: { Authorization: `Bearer ${token}` },
-//       });
-//       if (!res.ok) throw new Error(`Erreur ${res.status}`);
-//       await fetchEvaluations();
-//       setSelectedIndex(null);
-//     } catch (err) {
-//       alert("Erreur lors de la suppression : " + err.message);
-//     } finally {
-//       setIsSubmitting(false);
-//     }
-//   };
-
-//   // Soumission du formulaire modal
-//   const handleModalSubmit = (e) => {
-//     e.preventDefault();
-//     const inscriptionIdNum = parseInt(form.inscriptionId, 10);
-//     if (isNaN(inscriptionIdNum) || inscriptionIdNum <= 0) {
-//       alert("L'ID d'inscription doit être un nombre entier positif.");
-//       return;
-//     }
-//     const noteControleNum = parseFloat(form.noteControle);
-//     const noteExamenNum = parseFloat(form.noteExamen);
-//     if (
-//       isNaN(noteControleNum) ||
-//       noteControleNum < 0 ||
-//       noteControleNum > 20 ||
-//       isNaN(noteExamenNum) ||
-//       noteExamenNum < 0 ||
-//       noteExamenNum > 20
-//     ) {
-//       alert("Les notes doivent être comprises entre 0 et 20.");
-//       return;
-//     }
-//     const evaluationToSend = {
-//       noteControle: noteControleNum,
-//       noteExamen: noteExamenNum,
-//       inscription: { id: inscriptionIdNum },
-//     };
-//     if (modalMode === "create") saveEvaluation(evaluationToSend);
-//     else if (modalMode === "edit") {
-//       const idToUpdate = filteredEvaluations[selectedIndex].id;
-//       saveEvaluation(evaluationToSend, idToUpdate);
-//     }
-//   };
-
-//   // Ouvrir modal création
-//   const handleCreate = () => {
-//     setModalMode("create");
-//     setForm({ noteControle: "", noteExamen: "", inscriptionId: "" });
-//     setShowModal(true);
-//   };
-
-//   // Ouvrir modal modification
-//   const handleEdit = () => {
-//     if (selectedIndex === null) return;
-//     setModalMode("edit");
-//     const ev = filteredEvaluations[selectedIndex];
-//     setForm({
-//       noteControle: ev.noteControle?.toString() || "",
-//       noteExamen: ev.noteExamen?.toString() || "",
-//       inscriptionId: ev.inscription.id,
-//     });
-//     setShowModal(true);
-//   };
-
-//   const tdStyle = { padding: 8, borderBottom: "1px solid #e5e7eb" };
-
-//   return (
-//     <div
-//       style={{
-//         maxWidth: 1100,
-//         margin: "40px auto",
-//         padding: 20,
-//         background: "white",
-//         borderRadius: 8,
-//         boxShadow: "0 2px 16px #e0e0e0",
-//       }}
-//     >
-//       <h2 style={{ textAlign: "center", marginBottom: 30 }}>Liste des évaluations</h2>
-
-//       <div style={{ marginBottom: 15, textAlign: "center" }}>
-//         <input
-//           type="text"
-//           placeholder="Rechercher par Matricule"
-//           value={searchIne}
-//           onChange={(e) => setSearchIne(e.target.value)}
-//           disabled={isSubmitting}
-//           style={{ padding: 8, fontSize: 16, width: 280, borderRadius: 6, border: "1px solid #ccc" }}
-//         />
-//       </div>
-
-//       <div style={{ display: "flex", justifyContent: "center", gap: 12, marginBottom: 15 }}>
-//         <button
-//           onClick={handleCreate}
-//           disabled={isSubmitting}
-//           style={{
-//             padding: "10px 20px",
-//             backgroundColor: "#2563eb",
-//             color: "white",
-//             border: "none",
-//             borderRadius: 6,
-//             cursor: "pointer",
-//           }}
-//         >
-//           {isSubmitting && modalMode === "create" ? "En cours..." : "Créer évaluation"}
-//         </button>
-//         <button
-//           onClick={handleEdit}
-//           disabled={selectedIndex === null || isSubmitting}
-//           style={{
-//             padding: "10px 20px",
-//             backgroundColor: "#10b981",
-//             color: "white",
-//             border: "none",
-//             borderRadius: 6,
-//             cursor: selectedIndex === null ? "not-allowed" : "pointer",
-//           }}
-//         >
-//           Modifier évaluation
-//         </button>
-//         <button
-//           onClick={() => selectedIndex !== null && deleteEvaluation(filteredEvaluations[selectedIndex].id)}
-//           disabled={selectedIndex === null || isSubmitting}
-//           style={{
-//             padding: "10px 20px",
-//             backgroundColor: "#ef4444",
-//             color: "white",
-//             border: "none",
-//             borderRadius: 6,
-//             cursor: selectedIndex === null ? "not-allowed" : "pointer",
-//           }}
-//         >
-//           Supprimer évaluation
-//         </button>
-//       </div>
-
-//       {filteredEvaluations.length === 0 ? (
-//         <p style={{ textAlign: "center", padding: 20, color: "#888" }}>
-//           Aucune évaluation créée pour le moment.
-//         </p>
-//       ) : (
-//         <table style={{ width: "100%", borderCollapse: "collapse" }}>
-//           <thead>
-//             <tr style={{ backgroundColor: "#f1f5f9" }}>
-//               <th style={{ padding: 8, borderBottom: "2px solid #e5e7eb" }}>Matricule</th>
-//               <th style={{ padding: 8, borderBottom: "2px solid #e5e7eb" }}>Nom</th>
-//               <th style={{ padding: 8, borderBottom: "2px solid #e5e7eb" }}>Prénom</th>
-//               <th style={tdStyle}>Code UE</th>
-//               <th style={tdStyle}>Code EC</th>
-//               <th style={{ padding: 8, borderBottom: "2px solid #e5e7eb" }}>Année</th>
-//               <th style={{ padding: 8, borderBottom: "2px solid #e5e7eb" }}>Note contrôle</th>
-//               <th style={{ padding: 8, borderBottom: "2px solid #e5e7eb" }}>Note examen</th>
-//               {/* Nouvelle colonne Moyenne EC */}
-//               <th style={{ padding: 8, borderBottom: "2px solid #e5e7eb" }}>Moyenne EC</th>
-//             </tr>
-//           </thead>
-//           <tbody>
-//             {filteredEvaluations.map((ev, index) => (
-//               <tr
-//                 key={ev.id}
-//                 onClick={() => setSelectedIndex(index)}
-//                 style={{
-//                   backgroundColor: selectedIndex === index ? "#e0f2fe" : index % 2 === 0 ? "#f8fafc" : "white",
-//                   cursor: "pointer",
-//                 }}
-//               >
-//                 <td style={tdStyle}>{ev.inscription?.etudiant?.matricule || "—"}</td>
-//                 <td style={tdStyle}>{ev.inscription?.etudiant?.nom || "—"}</td>
-//                 <td style={tdStyle}>{ev.inscription?.etudiant?.prenom || "—"}</td>
-//                 <td style={tdStyle}>{ev.inscription?.ec?.ue?.codeUE || "—"}</td>
-//                 <td style={tdStyle}>{ev.inscription?.ec?.codeEC || "—"}</td>
-//                 <td style={tdStyle}>{ev.inscription?.anneeInscription || "—"}</td>
-//                 <td style={tdStyle}>{ev.noteControle != null ? ev.noteControle : "—"}</td>
-//                 <td style={tdStyle}>{ev.noteExamen != null ? ev.noteExamen : "—"}</td>
-//                 <td style={tdStyle}>
-//                   {/* Affiche la moyenne pour cet EC, arrondie à 2 décimales si disponible */}
-//                   {ev.inscription?.moyenne != null
-//                     ? Number(ev.inscription.moyenne).toFixed(2)
-//                     : "—"}
-//                 </td>
-//               </tr>
-//             ))}
-//           </tbody>
-//         </table>
-//       )}
-
-//       {showModal && (
-//         <div
-//           style={{
-//             position: "fixed",
-//             top: 0,
-//             left: 0,
-//             width: "100vw",
-//             height: "100vh",
-//             backgroundColor: "rgba(0,0,0,0.3)",
-//             display: "flex",
-//             alignItems: "center",
-//             justifyContent: "center",
-//             zIndex: 100,
-//           }}
-//         >
-//           <div
-//             style={{
-//               backgroundColor: "white",
-//               padding: 30,
-//               borderRadius: 10,
-//               width: 400,
-//               boxShadow: "0 2px 15px rgba(0,0,0,0.2)",
-//             }}
-//           >
-//             <h3>{modalMode === "create" ? "Créer une évaluation" : "Modifier une évaluation"}</h3>
-//             <form onSubmit={handleModalSubmit}>
-//               {modalMode === "create" && (
-//                 <>
-//                   <label>Rechercher une inscription</label>
-//                   <input
-//                     type="text"
-//                     placeholder="Recherche par INE, nom, UE, EC"
-//                     value={inscriptionSearch}
-//                     onChange={(e) => setInscriptionSearch(e.target.value)}
-//                     disabled={isSubmitting}
-//                     style={{ width: "100%", marginBottom: 10, padding: 8 }}
-//                     autoFocus
-//                   />
-//                   <div style={{ maxHeight: 150, overflowY: "auto", border: "1px solid #ccc", marginBottom: 15 }}>
-//                     {filteredInscriptions.length === 0 ? (
-//                       <p style={{ padding: 8, color: "#888" }}>Aucune inscription trouvée.</p>
-//                     ) : (
-//                       filteredInscriptions.map((insc) => (
-//                         <div
-//                           key={insc.id}
-//                           onClick={() => !isSubmitting && setForm((f) => ({ ...f, inscriptionId: insc.id }))}
-//                           style={{
-//                             padding: "8px 12px",
-//                             cursor: isSubmitting ? "default" : "pointer",
-//                             backgroundColor: form.inscriptionId === insc.id ? "#d1fae5" : "transparent",
-//                             userSelect: "none",
-//                           }}
-//                         >
-//                           <strong>{insc.etudiant?.matricule}</strong> - {insc.etudiant?.nom} {insc.etudiant?.prenom} | UE:{" "}
-//                           {insc.ec?.ue?.codeUE || "—"} | EC: {insc.ec?.codeEC || "—"} | Année: {insc.anneeInscription}
-//                         </div>
-//                       ))
-//                     )}
-//                   </div>
-//                 </>
-//               )}
-
-//               <label>Note contrôle</label>
-//               <input
-//                 type="number"
-//                 step="0.01"
-//                 min="0"
-//                 max="20"
-//                 required
-//                 value={form.noteControle}
-//                 onChange={(e) => setForm((f) => ({ ...f, noteControle: e.target.value }))}
-//                 disabled={isSubmitting}
-//                 autoFocus={modalMode === "edit"}
-//                 style={{ width: "100%", marginBottom: 15, padding: 8 }}
-//               />
-
-//               <label>Note examen</label>
-//               <input
-//                 type="number"
-//                 step="0.01"
-//                 min="0"
-//                 max="20"
-//                 required
-//                 value={form.noteExamen}
-//                 onChange={(e) => setForm((f) => ({ ...f, noteExamen: e.target.value }))}
-//                 disabled={isSubmitting}
-//                 style={{ width: "100%", marginBottom: 15, padding: 8 }}
-//               />
-
-//               <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
-//                 <button
-//                   type="button"
-//                   onClick={() => setShowModal(false)}
-//                   disabled={isSubmitting}
-//                   style={{ padding: "8px 16px" }}
-//                 >
-//                   Annuler
-//                 </button>
-//                 <button
-//                   type="submit"
-//                   disabled={isSubmitting}
-//                   style={{ padding: "8px 16px", backgroundColor: "#10b981", color: "white" }}
-//                 >
-//                   {isSubmitting ? "En cours..." : modalMode === "create" ? "Créer" : "Enregistrer"}
-//                 </button>
-//               </div>
-//             </form>
-//           </div>
-//         </div>
-//       )}
-//     </div>
-//   );
-// };
-
-// export default GestionEvaluation;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// import React, { useState, useEffect } from "react";
-
-// const API_EVALUATIONS_URL = "http://localhost:8080/api/evaluations";
-// const API_INSCRIPTIONS_URL = "http://localhost:8080/api/inscriptions";
-
-// const GestionEvaluation = () => {
-//   const [evaluations, setEvaluations] = useState([]);
-//   const [filteredEvaluations, setFilteredEvaluations] = useState([]);
-//   const [searchIne, setSearchIne] = useState("");
-//   const [selectedIndex, setSelectedIndex] = useState(null);
-
-//   const [showModal, setShowModal] = useState(false);
-//   const [modalMode, setModalMode] = useState("create"); // 'create' or 'edit'
-//   const [form, setForm] = useState({
-//     noteControle: "",
-//     noteExamen: "",
-//     inscriptionId: "",
-//   });
-//   const [isSubmitting, setIsSubmitting] = useState(false);
-
-//   const [inscriptions, setInscriptions] = useState([]);
-//   const [inscriptionSearch, setInscriptionSearch] = useState("");
-//   const [filteredInscriptions, setFilteredInscriptions] = useState([]);
-
-//   const token = sessionStorage.getItem("token");
-
-//   // Charger toutes les évaluations
-//   const fetchEvaluations = async () => {
-//     try {
-//       const res = await fetch(API_EVALUATIONS_URL, {
-//         headers: { Authorization: `Bearer ${token}` },
-//       });
-//       if (!res.ok) throw new Error(`Erreur ${res.status}`);
-//       const data = await res.json();
-//       setEvaluations(data);
-//     } catch (error) {
-//       console.error("Erreur fetchEvaluations:", error);
-//       setEvaluations([]);
-//     }
-//   };
-
-//   // Charger les inscriptions depuis l'API
-//   const fetchInscriptions = async () => {
-//     try {
-//       const res = await fetch(API_INSCRIPTIONS_URL, {
-//         headers: { Authorization: `Bearer ${token}` },
-//       });
-//       if (!res.ok) throw new Error(`Erreur ${res.status}`);
-//       const data = await res.json();
-//       setInscriptions(data);
-//       setFilteredInscriptions(data);
-//     } catch (error) {
-//       console.error("Erreur chargement inscriptions:", error);
-//       setInscriptions([]);
-//       setFilteredInscriptions([]);
-//     }
-//   };
-
-//   useEffect(() => {
-//     fetchEvaluations();
-//   }, []);
-
-//   // Filtrer évaluations selon INE recherché
-//   useEffect(() => {
-//     if (!searchIne) {
-//       setFilteredEvaluations(evaluations);
-//     } else {
-//       const searchLower = searchIne.toLowerCase();
-//       setFilteredEvaluations(
-//         evaluations.filter(
-//           (ev) =>
-//             ev.inscription?.etudiant?.matricule
-//               ?.toLowerCase()
-//               .includes(searchLower)
-//         )
-//       );
-//     }
-//   }, [searchIne, evaluations]);
-
-//   // Charger inscriptions à l'ouverture modal création
-//   useEffect(() => {
-//     if (showModal && modalMode === "create") {
-//       fetchInscriptions();
-//       setInscriptionSearch("");
-//       setForm((f) => ({ ...f, inscriptionId: "" }));
-//     }
-//   }, [showModal, modalMode]);
-
-//   // Filtrer inscriptions selon recherche
-//   useEffect(() => {
-//     if (!inscriptionSearch) {
-//       setFilteredInscriptions(inscriptions);
-//     } else {
-//       const lower = inscriptionSearch.toLowerCase();
-//       setFilteredInscriptions(
-//         inscriptions.filter((insc) => {
-//           const etu = insc.etudiant || {};
-//           const ec = insc.ec || {};
-//           const ue = ec.ue || {};
-//           return (
-//             etu.matricule?.toLowerCase().includes(lower) ||
-//             etu.nom?.toLowerCase().includes(lower) ||
-//             etu.prenom?.toLowerCase().includes(lower) ||
-//             ec.intitule?.toLowerCase().includes(lower) ||
-//             ue.intitule?.toLowerCase().includes(lower) ||
-//             insc.anneeInscription?.toString().includes(lower)
-//           );
-//         })
-//       );
-//     }
-//   }, [inscriptionSearch, inscriptions]);
-
-//   // Enregistrer évaluation (création/modification)
-//   const saveEvaluation = async (evaluation, idToUpdate = null) => {
-//     setIsSubmitting(true);
-//     try {
-//       const url = idToUpdate ? `${API_EVALUATIONS_URL}/${idToUpdate}` : API_EVALUATIONS_URL;
-//       const method = idToUpdate ? "PUT" : "POST";
-//       const res = await fetch(url, {
-//         method,
-//         headers: {
-//           "Content-Type": "application/json",
-//           Authorization: `Bearer ${token}`,
-//         },
-//         body: JSON.stringify(evaluation),
-//       });
-//       if (!res.ok) {
-//         const errorData = await res.json().catch(() => ({}));
-//         const message = errorData.message || `Erreur ${res.status}`;
-//         throw new Error(message);
-//       }
-//       await new Promise((r) => setTimeout(r, 300));
-//       await fetchEvaluations();
-//       setShowModal(false);
-//       setSelectedIndex(null);
-//     } catch (err) {
-//       alert("Erreur lors de la sauvegarde : " + err.message);
-//     } finally {
-//       setIsSubmitting(false);
-//     }
-//   };
-
-//   // Supprimer une évaluation
-//   const deleteEvaluation = async (id) => {
-//     if (!window.confirm("Confirmer la suppression ?")) return;
-//     setIsSubmitting(true);
-//     try {
-//       const res = await fetch(`${API_EVALUATIONS_URL}/${id}`, {
-//         method: "DELETE",
-//         headers: { Authorization: `Bearer ${token}` },
-//       });
-//       if (!res.ok) throw new Error(`Erreur ${res.status}`);
-//       await fetchEvaluations();
-//       setSelectedIndex(null);
-//     } catch (err) {
-//       alert("Erreur lors de la suppression : " + err.message);
-//     } finally {
-//       setIsSubmitting(false);
-//     }
-//   };
-
-//   // Soumission du formulaire modal
-//   const handleModalSubmit = (e) => {
-//     e.preventDefault();
-//     const inscriptionIdNum = parseInt(form.inscriptionId, 10);
-//     if (isNaN(inscriptionIdNum) || inscriptionIdNum <= 0) {
-//       alert("L'ID d'inscription doit être un nombre entier positif.");
-//       return;
-//     }
-//     const noteControleNum = parseFloat(form.noteControle);
-//     const noteExamenNum = parseFloat(form.noteExamen);
-//     if (
-//       isNaN(noteControleNum) ||
-//       noteControleNum < 0 ||
-//       noteControleNum > 20 ||
-//       isNaN(noteExamenNum) ||
-//       noteExamenNum < 0 ||
-//       noteExamenNum > 20
-//     ) {
-//       alert("Les notes doivent être comprises entre 0 et 20.");
-//       return;
-//     }
-//     const evaluationToSend = {
-//       noteControle: noteControleNum,
-//       noteExamen: noteExamenNum,
-//       inscription: { id: inscriptionIdNum },
-//     };
-//     if (modalMode === "create") saveEvaluation(evaluationToSend);
-//     else if (modalMode === "edit") {
-//       const idToUpdate = filteredEvaluations[selectedIndex].id;
-//       saveEvaluation(evaluationToSend, idToUpdate);
-//     }
-//   };
-
-//   // Ouvrir modal création
-//   const handleCreate = () => {
-//     setModalMode("create");
-//     setForm({ noteControle: "", noteExamen: "", inscriptionId: "" });
-//     setShowModal(true);
-//   };
-
-//   // Ouvrir modal modification
-//   const handleEdit = () => {
-//     if (selectedIndex === null) return;
-//     setModalMode("edit");
-//     const ev = filteredEvaluations[selectedIndex];
-//     setForm({
-//       noteControle: ev.noteControle?.toString() || "",
-//       noteExamen: ev.noteExamen?.toString() || "",
-//       inscriptionId: ev.inscription.id,
-//     });
-//     setShowModal(true);
-//   };
-
-//   const tdStyle = { padding: 8, borderBottom: "1px solid #e5e7eb" };
-
-//   return (
-//     <div
-//       style={{
-//         maxWidth: 1100,
-//         margin: "40px auto",
-//         padding: 20,
-//         background: "white",
-//         borderRadius: 8,
-//         boxShadow: "0 2px 16px #e0e0e0",
-//       }}
-//     >
-//       <h2 style={{ textAlign: "center", marginBottom: 30 }}>Liste des évaluations</h2>
-
-//       <div style={{ marginBottom: 15, textAlign: "center" }}>
-//         <input
-//           type="text"
-//           placeholder="Rechercher par Matricule"
-//           value={searchIne}
-//           onChange={(e) => setSearchIne(e.target.value)}
-//           disabled={isSubmitting}
-//           style={{ padding: 8, fontSize: 16, width: 280, borderRadius: 6, border: "1px solid #ccc" }}
-//         />
-//       </div>
-
-//       <div style={{ display: "flex", justifyContent: "center", gap: 12, marginBottom: 15 }}>
-//         <button
-//           onClick={handleCreate}
-//           disabled={isSubmitting}
-//           style={{
-//             padding: "10px 20px",
-//             backgroundColor: "#2563eb",
-//             color: "white",
-//             border: "none",
-//             borderRadius: 6,
-//             cursor: "pointer",
-//           }}
-//         >
-//           {isSubmitting && modalMode === "create" ? "En cours..." : "Créer évaluation"}
-//         </button>
-//         <button
-//           onClick={handleEdit}
-//           disabled={selectedIndex === null || isSubmitting}
-//           style={{
-//             padding: "10px 20px",
-//             backgroundColor: "#10b981",
-//             color: "white",
-//             border: "none",
-//             borderRadius: 6,
-//             cursor: selectedIndex === null ? "not-allowed" : "pointer",
-//           }}
-//         >
-//           Modifier évaluation
-//         </button>
-//         <button
-//           onClick={() => selectedIndex !== null && deleteEvaluation(filteredEvaluations[selectedIndex].id)}
-//           disabled={selectedIndex === null || isSubmitting}
-//           style={{
-//             padding: "10px 20px",
-//             backgroundColor: "#ef4444",
-//             color: "white",
-//             border: "none",
-//             borderRadius: 6,
-//             cursor: selectedIndex === null ? "not-allowed" : "pointer",
-//           }}
-//         >
-//           Supprimer évaluation
-//         </button>
-//       </div>
-
-//       {filteredEvaluations.length === 0 ? (
-//         <p style={{ textAlign: "center", padding: 20, color: "#888" }}>
-//           Aucune évaluation créée pour le moment.
-//         </p>
-//       ) : (
-//         <table style={{ width: "100%", borderCollapse: "collapse" }}>
-//           <thead>
-//             <tr style={{ backgroundColor: "#f1f5f9" }}>
-//               <th style={{ padding: 8, borderBottom: "2px solid #e5e7eb" }}>Matricule</th>
-//               <th style={{ padding: 8, borderBottom: "2px solid #e5e7eb" }}>Nom</th>
-//               <th style={{ padding: 8, borderBottom: "2px solid #e5e7eb" }}>Prénom</th>
-//               <th style={tdStyle}>Code UE</th>
-//               <th style={tdStyle}>Code EC</th>
-//               <th style={{ padding: 8, borderBottom: "2px solid #e5e7eb" }}>Année</th>
-//               <th style={{ padding: 8, borderBottom: "2px solid #e5e7eb" }}>Note contrôle</th>
-//               <th style={{ padding: 8, borderBottom: "2px solid #e5e7eb" }}>Note examen</th>
-//             </tr>
-//           </thead>
-//           <tbody>
-//             {filteredEvaluations.map((ev, index) => (
-//               <tr
-//                 key={ev.id}
-//                 onClick={() => setSelectedIndex(index)}
-//                 style={{
-//                   backgroundColor: selectedIndex === index ? "#e0f2fe" : index % 2 === 0 ? "#f8fafc" : "white",
-//                   cursor: "pointer",
-//                 }}
-//               >
-//                 <td style={tdStyle}>{ev.inscription?.etudiant?.matricule || "—"}</td>
-//                 <td style={tdStyle}>{ev.inscription?.etudiant?.nom || "—"}</td>
-//                 <td style={tdStyle}>{ev.inscription?.etudiant?.prenom || "—"}</td>
-//                 <td style={tdStyle}>{ev.inscription?.ec?.ue?.codeUE || "—"}</td>
-//                 <td style={tdStyle}>{ev.inscription?.ec?.codeEC || "—"}</td>
-//                 <td style={tdStyle}>{ev.inscription?.anneeInscription || "—"}</td>
-//                 <td style={tdStyle}>{ev.noteControle != null ? ev.noteControle : "—"}</td>
-//                 <td style={tdStyle}>{ev.noteExamen != null ? ev.noteExamen : "—"}</td>
-//               </tr>
-//             ))}
-//           </tbody>
-//         </table>
-//       )}
-
-//       {showModal && (
-//         <div
-//           style={{
-//             position: "fixed",
-//             top: 0,
-//             left: 0,
-//             width: "100vw",
-//             height: "100vh",
-//             backgroundColor: "rgba(0,0,0,0.3)",
-//             display: "flex",
-//             alignItems: "center",
-//             justifyContent: "center",
-//             zIndex: 100,
-//           }}
-//         >
-//           <div
-//             style={{
-//               backgroundColor: "white",
-//               padding: 30,
-//               borderRadius: 10,
-//               width: 400,
-//               boxShadow: "0 2px 15px rgba(0,0,0,0.2)",
-//             }}
-//           >
-//             <h3>{modalMode === "create" ? "Créer une évaluation" : "Modifier une évaluation"}</h3>
-//             <form onSubmit={handleModalSubmit}>
-//               {modalMode === "create" && (
-//                 <>
-//                   <label>Rechercher une inscription</label>
-//                   <input
-//                     type="text"
-//                     placeholder="Recherche par INE, nom, UE, EC"
-//                     value={inscriptionSearch}
-//                     onChange={(e) => setInscriptionSearch(e.target.value)}
-//                     disabled={isSubmitting}
-//                     style={{ width: "100%", marginBottom: 10, padding: 8 }}
-//                     autoFocus
-//                   />
-//                   <div style={{ maxHeight: 150, overflowY: "auto", border: "1px solid #ccc", marginBottom: 15 }}>
-//                     {filteredInscriptions.length === 0 ? (
-//                       <p style={{ padding: 8, color: "#888" }}>Aucune inscription trouvée.</p>
-//                     ) : (
-//                       filteredInscriptions.map((insc) => (
-//                         <div
-//                           key={insc.id}
-//                           onClick={() => !isSubmitting && setForm((f) => ({ ...f, inscriptionId: insc.id }))}
-//                           style={{
-//                             padding: "8px 12px",
-//                             cursor: isSubmitting ? "default" : "pointer",
-//                             backgroundColor: form.inscriptionId === insc.id ? "#d1fae5" : "transparent",
-//                             userSelect: "none",
-//                           }}
-//                         >
-//                           <strong>{insc.etudiant?.matricule}</strong> - {insc.etudiant?.nom} {insc.etudiant?.prenom} | UE:{" "}
-//                           {insc.ec?.ue?.codeUE || "—"} | EC: {insc.ec?.codeEC || "—"} | Année: {insc.anneeInscription}
-//                         </div>
-//                       ))
-//                     )}
-//                   </div>
-//                 </>
-//               )}
-
-//               <label>Note contrôle</label>
-//               <input
-//                 type="number"
-//                 step="0.01"
-//                 min="0"
-//                 max="20"
-//                 required
-//                 value={form.noteControle}
-//                 onChange={(e) => setForm((f) => ({ ...f, noteControle: e.target.value }))}
-//                 disabled={isSubmitting}
-//                 autoFocus={modalMode === "edit"}
-//                 style={{ width: "100%", marginBottom: 15, padding: 8 }}
-//               />
-
-//               <label>Note examen</label>
-//               <input
-//                 type="number"
-//                 step="0.01"
-//                 min="0"
-//                 max="20"
-//                 required
-//                 value={form.noteExamen}
-//                 onChange={(e) => setForm((f) => ({ ...f, noteExamen: e.target.value }))}
-//                 disabled={isSubmitting}
-//                 style={{ width: "100%", marginBottom: 15, padding: 8 }}
-//               />
-
-//               <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
-//                 <button
-//                   type="button"
-//                   onClick={() => setShowModal(false)}
-//                   disabled={isSubmitting}
-//                   style={{ padding: "8px 16px" }}
-//                 >
-//                   Annuler
-//                 </button>
-//                 <button
-//                   type="submit"
-//                   disabled={isSubmitting}
-//                   style={{ padding: "8px 16px", backgroundColor: "#10b981", color: "white" }}
-//                 >
-//                   {isSubmitting ? "En cours..." : modalMode === "create" ? "Créer" : "Enregistrer"}
-//                 </button>
-//               </div>
-//             </form>
-//           </div>
-//         </div>
-//       )}
-//     </div>
-//   );
-// };
-
-// export default GestionEvaluation;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// import React, { useState, useEffect } from "react";
-
-// const API_EVALUATIONS_URL = "http://localhost:8080/api/evaluations";
-// const API_INSCRIPTIONS_URL = "http://localhost:8080/api/inscriptions";
-
-// const GestionEvaluation = () => {
-//   const [evaluations, setEvaluations] = useState([]);
-//   const [filteredEvaluations, setFilteredEvaluations] = useState([]);
-//   const [searchIne, setSearchIne] = useState("");
-//   const [selectedIndex, setSelectedIndex] = useState(null);
-
-//   const [showModal, setShowModal] = useState(false);
-//   const [modalMode, setModalMode] = useState("create"); // 'create' or 'edit'
-//   const [form, setForm] = useState({
-//     noteControle: "",
-//     noteExamen: "",
-//     inscriptionId: "",
-//   });
-//   const [isSubmitting, setIsSubmitting] = useState(false);
-
-//   const [inscriptions, setInscriptions] = useState([]);
-//   const [inscriptionSearch, setInscriptionSearch] = useState("");
-//   const [filteredInscriptions, setFilteredInscriptions] = useState([]);
-
-//   const token = sessionStorage.getItem("token");
-
-//   // Charger toutes les évaluations
-//   const fetchEvaluations = async () => {
-//     try {
-//       const res = await fetch(API_EVALUATIONS_URL, {
-//         headers: { Authorization: `Bearer ${token}` },
-//       });
-//       if (!res.ok) throw new Error(`Erreur ${res.status}`);
-//       const data = await res.json();
-//       setEvaluations(data);
-//     } catch (error) {
-//       console.error("Erreur fetchEvaluations:", error);
-//       setEvaluations([]);
-//     }
-//   };
-
-//   // Charger les inscriptions depuis l'API
-//   const fetchInscriptions = async () => {
-//     try {
-//       const res = await fetch(API_INSCRIPTIONS_URL, {
-//         headers: { Authorization: `Bearer ${token}` },
-//       });
-//       if (!res.ok) throw new Error(`Erreur ${res.status}`);
-//       const data = await res.json();
-//       setInscriptions(data);
-//       setFilteredInscriptions(data);
-//     } catch (error) {
-//       console.error("Erreur chargement inscriptions:", error);
-//       setInscriptions([]);
-//       setFilteredInscriptions([]);
-//     }
-//   };
-
-//   useEffect(() => {
-//     fetchEvaluations();
-//   }, []);
-
-//   // Filtrer évaluations selon INE recherché
-//   useEffect(() => {
-//     if (!searchIne) {
-//       setFilteredEvaluations(evaluations);
-//     } else {
-//       const searchLower = searchIne.toLowerCase();
-//       setFilteredEvaluations(
-//         evaluations.filter(
-//           (ev) =>
-//             ev.inscription?.etudiant?.matricule
-//               ?.toLowerCase()
-//               .includes(searchLower)
-//         )
-//       );
-//     }
-//   }, [searchIne, evaluations]);
-
-//   // Charger inscriptions à l'ouverture modal création
-//   useEffect(() => {
-//     if (showModal && modalMode === "create") {
-//       fetchInscriptions();
-//       setInscriptionSearch("");
-//       setForm((f) => ({ ...f, inscriptionId: "" }));
-//     }
-//   }, [showModal, modalMode]);
-
-//   // Filtrer inscriptions selon recherche
-//   useEffect(() => {
-//     if (!inscriptionSearch) {
-//       setFilteredInscriptions(inscriptions);
-//     } else {
-//       const lower = inscriptionSearch.toLowerCase();
-//       setFilteredInscriptions(
-//         inscriptions.filter((insc) => {
-//           const etu = insc.etudiant || {};
-//           const ec = insc.ec || {};
-//           const ue = ec.ue || {};
-//           return (
-//             etu.matricule?.toLowerCase().includes(lower) ||
-//             etu.nom?.toLowerCase().includes(lower) ||
-//             etu.prenom?.toLowerCase().includes(lower) ||
-//             ec.intitule?.toLowerCase().includes(lower) ||
-//             ue.intitule?.toLowerCase().includes(lower) ||
-//             insc.anneeInscription?.toString().includes(lower)
-//           );
-//         })
-//       );
-//     }
-//   }, [inscriptionSearch, inscriptions]);
-
-//   // Enregistrer évaluation (création/modification)
-//   const saveEvaluation = async (evaluation, idToUpdate = null) => {
-//     setIsSubmitting(true);
-//     try {
-//       const url = idToUpdate ? `${API_EVALUATIONS_URL}/${idToUpdate}` : API_EVALUATIONS_URL;
-//       const method = idToUpdate ? "PUT" : "POST";
-//       const res = await fetch(url, {
-//         method,
-//         headers: {
-//           "Content-Type": "application/json",
-//           Authorization: `Bearer ${token}`,
-//         },
-//         body: JSON.stringify(evaluation),
-//       });
-//       if (!res.ok) {
-//         const errorData = await res.json().catch(() => ({}));
-//         const message = errorData.message || `Erreur ${res.status}`;
-//         throw new Error(message);
-//       }
-//       // Optionnel: petit délai avant rafraîchissement
-//       await new Promise((r) => setTimeout(r, 300));
-//       await fetchEvaluations();
-//       setShowModal(false);
-//       setSelectedIndex(null);
-//     } catch (err) {
-//       alert("Erreur lors de la sauvegarde : " + err.message);
-//     } finally {
-//       setIsSubmitting(false);
-//     }
-//   };
-
-//   // Supprimer une évaluation
-//   const deleteEvaluation = async (id) => {
-//     if (!window.confirm("Confirmer la suppression ?")) return;
-//     setIsSubmitting(true);
-//     try {
-//       const res = await fetch(`${API_EVALUATIONS_URL}/${id}`, {
-//         method: "DELETE",
-//         headers: { Authorization: `Bearer ${token}` },
-//       });
-//       if (!res.ok) throw new Error(`Erreur ${res.status}`);
-//       await fetchEvaluations();
-//       setSelectedIndex(null);
-//     } catch (err) {
-//       alert("Erreur lors de la suppression : " + err.message);
-//     } finally {
-//       setIsSubmitting(false);
-//     }
-//   };
-
-//   // Soumission du formulaire modal
-//   const handleModalSubmit = (e) => {
-//     e.preventDefault();
-//     const inscriptionIdNum = parseInt(form.inscriptionId, 10);
-//     if (isNaN(inscriptionIdNum) || inscriptionIdNum <= 0) {
-//       alert("L'ID d'inscription doit être un nombre entier positif.");
-//       return;
-//     }
-//     const noteControleNum = parseFloat(form.noteControle);
-//     const noteExamenNum = parseFloat(form.noteExamen);
-//     if (
-//       isNaN(noteControleNum) ||
-//       noteControleNum < 0 ||
-//       noteControleNum > 20 ||
-//       isNaN(noteExamenNum) ||
-//       noteExamenNum < 0 ||
-//       noteExamenNum > 20
-//     ) {
-//       alert("Les notes doivent être comprises entre 0 et 20.");
-//       return;
-//     }
-//     const evaluationToSend = {
-//       noteControle: noteControleNum,
-//       noteExamen: noteExamenNum,
-//       inscription: { id: inscriptionIdNum },
-//     };
-//     if (modalMode === "create") saveEvaluation(evaluationToSend);
-//     else if (modalMode === "edit") {
-//       const idToUpdate = filteredEvaluations[selectedIndex].id;
-//       saveEvaluation(evaluationToSend, idToUpdate);
-//     }
-//   };
-
-//   // Ouvrir modal création
-//   const handleCreate = () => {
-//     setModalMode("create");
-//     setForm({ noteControle: "", noteExamen: "", inscriptionId: "" });
-//     setShowModal(true);
-//   };
-
-//   // Ouvrir modal modification
-//   const handleEdit = () => {
-//     if (selectedIndex === null) return;
-//     setModalMode("edit");
-//     const ev = filteredEvaluations[selectedIndex];
-//     setForm({
-//       noteControle: ev.noteControle?.toString() || "",
-//       noteExamen: ev.noteExamen?.toString() || "",
-//       inscriptionId: ev.inscription.id,
-//     });
-//     setShowModal(true);
-//   };
-
-//   const tdStyle = { padding: 8, borderBottom: "1px solid #e5e7eb" };
-
-//   return (
-//     <div
-//       style={{
-//         maxWidth: 1100,
-//         margin: "40px auto",
-//         padding: 20,
-//         background: "white",
-//         borderRadius: 8,
-//         boxShadow: "0 2px 16px #e0e0e0",
-//       }}
-//     >
-//       <h2 style={{ textAlign: "center", marginBottom: 30 }}>Liste des évaluations</h2>
-
-//       <div style={{ marginBottom: 15, textAlign: "center" }}>
-//         <input
-//           type="text"
-//           placeholder="Rechercher par Matricule"
-//           value={searchIne}
-//           onChange={(e) => setSearchIne(e.target.value)}
-//           disabled={isSubmitting}
-//           style={{ padding: 8, fontSize: 16, width: 280, borderRadius: 6, border: "1px solid #ccc" }}
-//         />
-//       </div>
-
-//       <div style={{ display: "flex", justifyContent: "center", gap: 12, marginBottom: 15 }}>
-//         <button
-//           onClick={handleCreate}
-//           disabled={isSubmitting}
-//           style={{
-//             padding: "10px 20px",
-//             backgroundColor: "#2563eb",
-//             color: "white",
-//             border: "none",
-//             borderRadius: 6,
-//             cursor: "pointer",
-//           }}
-//         >
-//           {isSubmitting && modalMode === "create" ? "En cours..." : "Créer évaluation"}
-//         </button>
-//         <button
-//           onClick={handleEdit}
-//           disabled={selectedIndex === null || isSubmitting}
-//           style={{
-//             padding: "10px 20px",
-//             backgroundColor: "#10b981",
-//             color: "white",
-//             border: "none",
-//             borderRadius: 6,
-//             cursor: selectedIndex === null ? "not-allowed" : "pointer",
-//           }}
-//         >
-//           Modifier évaluation
-//         </button>
-//         <button
-//           onClick={() => selectedIndex !== null && deleteEvaluation(filteredEvaluations[selectedIndex].id)}
-//           disabled={selectedIndex === null || isSubmitting}
-//           style={{
-//             padding: "10px 20px",
-//             backgroundColor: "#ef4444",
-//             color: "white",
-//             border: "none",
-//             borderRadius: 6,
-//             cursor: selectedIndex === null ? "not-allowed" : "pointer",
-//           }}
-//         >
-//           Supprimer évaluation
-//         </button>
-//       </div>
-
-//       {filteredEvaluations.length === 0 ? (
-//         <p style={{ textAlign: "center", padding: 20, color: "#888" }}>
-//           Aucune évaluation créée pour le moment.
-//         </p>
-//       ) : (
-//         <table style={{ width: "100%", borderCollapse: "collapse" }}>
-//           <thead>
-//             <tr style={{ backgroundColor: "#f1f5f9" }}>
-//               <th style={{ padding: 8, borderBottom: "2px solid #e5e7eb" }}>Matricule</th>
-//               <th style={{ padding: 8, borderBottom: "2px solid #e5e7eb" }}>Nom</th>
-//               <th style={{ padding: 8, borderBottom: "2px solid #e5e7eb" }}>Prénom</th>
-//               <th style={{ padding: 8, borderBottom: "2px solid #e5e7eb" }}>Code UE</th>
-//               <th style={{ padding: 8, borderBottom: "2px solid #e5e7eb" }}>Code EC</th>
-//               <th style={{ padding: 8, borderBottom: "2px solid #e5e7eb" }}>Année</th>
-//               <th style={{ padding: 8, borderBottom: "2px solid #e5e7eb" }}>Note contrôle</th>
-//               <th style={{ padding: 8, borderBottom: "2px solid #e5e7eb" }}>Note examen</th>
-//             </tr>
-//           </thead>
-//           <tbody>
-//             {filteredEvaluations.map((ev, index) => (
-//               <tr
-//                 key={ev.id}
-//                 onClick={() => setSelectedIndex(index)}
-//                 style={{
-//                   backgroundColor: selectedIndex === index ? "#e0f2fe" : index % 2 === 0 ? "#f8fafc" : "white",
-//                   cursor: "pointer",
-//                 }}
-//               >
-//                 <td style={tdStyle}>{ev.inscription?.etudiant?.matricule}</td>
-//                 <td style={tdStyle}>{ev.inscription?.etudiant?.nom}</td>
-//                 <td style={tdStyle}>{ev.inscription?.etudiant?.prenom}</td>
-//                 <td style={tdStyle}>{ev.inscription?.ec?.ue?.intitule}</td>
-//                 <td style={tdStyle}>{ev.inscription?.ec?.intitule}</td>
-//                 <td style={tdStyle}>{ev.inscription?.anneeInscription}</td>
-//                 <td style={tdStyle}>{ev.noteControle}</td>
-//                 <td style={tdStyle}>{ev.noteExamen}</td>
-//               </tr>
-//             ))}
-//           </tbody>
-//         </table>
-//       )}
-
-//       {showModal && (
-//         <div
-//           style={{
-//             position: "fixed",
-//             top: 0,
-//             left: 0,
-//             width: "100vw",
-//             height: "100vh",
-//             backgroundColor: "rgba(0,0,0,0.3)",
-//             display: "flex",
-//             alignItems: "center",
-//             justifyContent: "center",
-//             zIndex: 100,
-//           }}
-//         >
-//           <div
-//             style={{
-//               backgroundColor: "white",
-//               padding: 30,
-//               borderRadius: 10,
-//               width: 400,
-//               boxShadow: "0 2px 15px rgba(0,0,0,0.2)",
-//             }}
-//           >
-//             <h3>{modalMode === "create" ? "Créer une évaluation" : "Modifier une évaluation"}</h3>
-//             <form onSubmit={handleModalSubmit}>
-//               {modalMode === "create" && (
-//                 <>
-//                   <label>Rechercher une inscription</label>
-//                   <input
-//                     type="text"
-//                     placeholder="Recherche par INE, nom, UE, EC"
-//                     value={inscriptionSearch}
-//                     onChange={(e) => setInscriptionSearch(e.target.value)}
-//                     disabled={isSubmitting}
-//                     style={{ width: "100%", marginBottom: 10, padding: 8 }}
-//                     autoFocus
-//                   />
-//                   <div style={{ maxHeight: 150, overflowY: "auto", border: "1px solid #ccc", marginBottom: 15 }}>
-//                     {filteredInscriptions.length === 0 ? (
-//                       <p style={{ padding: 8, color: "#888" }}>Aucune inscription trouvée.</p>
-//                     ) : (
-//                       filteredInscriptions.map((insc) => (
-//                         <div
-//                           key={insc.id}
-//                           onClick={() => !isSubmitting && setForm((f) => ({ ...f, inscriptionId: insc.id }))}
-//                           style={{
-//                             padding: "8px 12px",
-//                             cursor: isSubmitting ? "default" : "pointer",
-//                             backgroundColor: form.inscriptionId === insc.id ? "#d1fae5" : "transparent",
-//                             userSelect: "none",
-//                           }}
-//                         >
-//                           <strong>{insc.etudiant?.matricule}</strong> - {insc.etudiant?.nom} {insc.etudiant?.prenom} | UE:{" "}
-//                           {insc.ec?.ue?.intitule} | EC: {insc.ec?.intitule} | Année: {insc.anneeInscription}
-//                         </div>
-//                       ))
-//                     )}
-//                   </div>
-//                 </>
-//               )}
-
-//               <label>Note contrôle</label>
-//               <input
-//                 type="number"
-//                 step="0.01"
-//                 min="0"
-//                 max="20"
-//                 required
-//                 value={form.noteControle}
-//                 onChange={(e) => setForm((f) => ({ ...f, noteControle: e.target.value }))}
-//                 disabled={isSubmitting}
-//                 autoFocus={modalMode === "edit"}
-//                 style={{ width: "100%", marginBottom: 15, padding: 8 }}
-//               />
-
-//               <label>Note examen</label>
-//               <input
-//                 type="number"
-//                 step="0.01"
-//                 min="0"
-//                 max="20"
-//                 required
-//                 value={form.noteExamen}
-//                 onChange={(e) => setForm((f) => ({ ...f, noteExamen: e.target.value }))}
-//                 disabled={isSubmitting}
-//                 style={{ width: "100%", marginBottom: 15, padding: 8 }}
-//               />
-
-//               <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
-//                 <button
-//                   type="button"
-//                   onClick={() => setShowModal(false)}
-//                   disabled={isSubmitting}
-//                   style={{ padding: "8px 16px" }}
-//                 >
-//                   Annuler
-//                 </button>
-//                 <button
-//                   type="submit"
-//                   disabled={isSubmitting}
-//                   style={{ padding: "8px 16px", backgroundColor: "#10b981", color: "white" }}
-//                 >
-//                   {isSubmitting ? "En cours..." : modalMode === "create" ? "Créer" : "Enregistrer"}
-//                 </button>
-//               </div>
-//             </form>
-//           </div>
-//         </div>
-//       )}
-//     </div>
-//   );
-// };
-
-// export default GestionEvaluation;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// import React, { useState, useEffect } from "react";
-
-// const API_EVALUATIONS_URL = "http://localhost:8080/api/evaluations";
-// const API_INSCRIPTIONS_URL = "http://localhost:8080/api/inscriptions";
-
-// const GestionEvaluation = () => {
-//   const [evaluations, setEvaluations] = useState([]);
-//   const [filteredEvaluations, setFilteredEvaluations] = useState([]);
-//   const [searchIne, setSearchIne] = useState("");
-//   const [selectedIndex, setSelectedIndex] = useState(null);
-
-//   const [showModal, setShowModal] = useState(false);
-//   const [modalMode, setModalMode] = useState("create"); // 'create' ou 'edit'
-//   const [form, setForm] = useState({
-//     noteControle: "",
-//     noteExamen: "",
-//     inscriptionId: "",
-//   });
-//   const [isSubmitting, setIsSubmitting] = useState(false);
-
-//   const [inscriptions, setInscriptions] = useState([]);
-//   const [inscriptionSearch, setInscriptionSearch] = useState("");
-//   const [filteredInscriptions, setFilteredInscriptions] = useState([]);
-
-//   const token = sessionStorage.getItem("token");
-
-//   // Charger toutes les évaluations
-//   const fetchEvaluations = async () => {
-//     try {
-//       const res = await fetch(API_EVALUATIONS_URL, {
-//         headers: { Authorization: `Bearer ${token}` },
-//       });
-//       if (!res.ok) throw new Error(`Erreur ${res.status}`);
-//       const data = await res.json();
-//       setEvaluations(data);
-//     } catch (error) {
-//       console.error("Erreur fetchEvaluations:", error);
-//       setEvaluations([]);
-//     }
-//   };
-
-//   // Charger les inscriptions depuis l'API
-//   const fetchInscriptions = async () => {
-//     try {
-//       const res = await fetch(API_INSCRIPTIONS_URL, {
-//         headers: { Authorization: `Bearer ${token}` },
-//       });
-//       if (!res.ok) throw new Error(`Erreur ${res.status}`);
-//       const data = await res.json();
-//       setInscriptions(data);
-//       setFilteredInscriptions(data);
-//     } catch (error) {
-//       console.error("Erreur chargement inscriptions:", error);
-//       setInscriptions([]);
-//       setFilteredInscriptions([]);
-//     }
-//   };
-
-//   useEffect(() => {
-//     fetchEvaluations();
-//   }, []);
-
-//   // Filtrer évaluations selon INE recherché
-//   useEffect(() => {
-//     if (!searchIne) {
-//       setFilteredEvaluations(evaluations);
-//     } else {
-//       const searchLower = searchIne.toLowerCase();
-//       setFilteredEvaluations(
-//         evaluations.filter(
-//           (ev) =>
-//             ev.inscription?.etudiant?.matricule?.toLowerCase().includes(searchLower)
-//         )
-//       );
-//     }
-//   }, [searchIne, evaluations]);
-
-//   // Charger inscriptions à l'ouverture modal création
-//   useEffect(() => {
-//     if (showModal && modalMode === "create") {
-//       fetchInscriptions();
-//       setInscriptionSearch("");
-//       setForm((f) => ({ ...f, inscriptionId: "" }));
-//     }
-//   }, [showModal, modalMode]);
-
-//   // Filtrer inscriptions selon recherche
-//   useEffect(() => {
-//     if (!inscriptionSearch) {
-//       setFilteredInscriptions(inscriptions);
-//     } else {
-//       const lower = inscriptionSearch.toLowerCase();
-//       setFilteredInscriptions(
-//         inscriptions.filter((insc) => {
-//           const etu = insc.etudiant || {};
-//           const ec = insc.ec || {};
-//           const ue = ec.ue || {};
-//           return (
-//             etu.matricule?.toLowerCase().includes(lower) ||
-//             etu.nom?.toLowerCase().includes(lower) ||
-//             etu.prenom?.toLowerCase().includes(lower) ||
-//             ec.intitule?.toLowerCase().includes(lower) ||
-//             ue.intitule?.toLowerCase().includes(lower) ||
-//             insc.annee_inscription?.toString().includes(lower)
-//           );
-//         })
-//       );
-//     }
-//   }, [inscriptionSearch, inscriptions]);
-
-//   // Enregistrer évaluation (création/modification)
-//   const saveEvaluation = async (evaluation, idToUpdate = null) => {
-//     setIsSubmitting(true);
-//     try {
-//       const url = idToUpdate ? `${API_EVALUATIONS_URL}/${idToUpdate}` : API_EVALUATIONS_URL;
-//       const method = idToUpdate ? "PUT" : "POST";
-//       const res = await fetch(url, {
-//         method,
-//         headers: {
-//           "Content-Type": "application/json",
-//           Authorization: `Bearer ${token}`,
-//         },
-//         body: JSON.stringify(evaluation),
-//       });
-//       if (!res.ok) {
-//         const errorData = await res.json().catch(() => ({}));
-//         const message = errorData.message || `Erreur ${res.status}`;
-//         throw new Error(message);
-//       }
-//       // Optionnel: attendre un court délai pour que backend sauvegarde correctement
-//       await new Promise((r) => setTimeout(r, 300));
-//       await fetchEvaluations();
-//       setShowModal(false);
-//       setSelectedIndex(null);
-//     } catch (err) {
-//       alert("Erreur lors de la sauvegarde : " + err.message);
-//     } finally {
-//       setIsSubmitting(false);
-//     }
-//   };
-
-//   // Supprimer une évaluation
-//   const deleteEvaluation = async (id) => {
-//     if (!window.confirm("Confirmer la suppression ?")) return;
-//     setIsSubmitting(true);
-//     try {
-//       const res = await fetch(`${API_EVALUATIONS_URL}/${id}`, {
-//         method: "DELETE",
-//         headers: { Authorization: `Bearer ${token}` },
-//       });
-//       if (!res.ok) throw new Error(`Erreur ${res.status}`);
-//       await fetchEvaluations();
-//       setSelectedIndex(null);
-//     } catch (err) {
-//       alert("Erreur lors de la suppression : " + err.message);
-//     } finally {
-//       setIsSubmitting(false);
-//     }
-//   };
-
-//   // Soumission du formulaire modal
-//   const handleModalSubmit = (e) => {
-//     e.preventDefault();
-//     const inscriptionIdNum = parseInt(form.inscriptionId, 10);
-//     if (isNaN(inscriptionIdNum) || inscriptionIdNum <= 0) {
-//       alert("L'ID d'inscription doit être un nombre entier positif.");
-//       return;
-//     }
-//     const noteControleNum = parseFloat(form.noteControle);
-//     const noteExamenNum = parseFloat(form.noteExamen);
-//     if (
-//       isNaN(noteControleNum) ||
-//       noteControleNum < 0 ||
-//       noteControleNum > 20 ||
-//       isNaN(noteExamenNum) ||
-//       noteExamenNum < 0 ||
-//       noteExamenNum > 20
-//     ) {
-//       alert("Les notes doivent être comprises entre 0 et 20.");
-//       return;
-//     }
-//     const evaluationToSend = {
-//       noteControle: noteControleNum,
-//       noteExamen: noteExamenNum,
-//       inscription: { id: inscriptionIdNum },
-//     };
-//     if (modalMode === "create") saveEvaluation(evaluationToSend);
-//     else if (modalMode === "edit") {
-//       const idToUpdate = filteredEvaluations[selectedIndex].id;
-//       saveEvaluation(evaluationToSend, idToUpdate);
-//     }
-//   };
-
-//   // Ouvrir modal création
-//   const handleCreate = () => {
-//     setModalMode("create");
-//     setForm({ noteControle: "", noteExamen: "", inscriptionId: "" });
-//     setShowModal(true);
-//   };
-
-//   // Ouvrir modal modification
-//   const handleEdit = () => {
-//     if (selectedIndex === null) return;
-//     setModalMode("edit");
-//     const ev = filteredEvaluations[selectedIndex];
-//     setForm({
-//       noteControle: ev.note_controle?.toString() || "",
-//       noteExamen: ev.note_examen?.toString() || "",
-//       inscriptionId: ev.inscription.id,
-//     });
-//     setShowModal(true);
-//   };
-
-//   return (
-//     <div
-//       style={{
-//         maxWidth: 1100,
-//         margin: "40px auto",
-//         padding: 20,
-//         background: "white",
-//         borderRadius: 8,
-//         boxShadow: "0 2px 16px #e0e0e0",
-//       }}
-//     >
-//       <h2 style={{ textAlign: "center", marginBottom: 30 }}>Liste des évaluations</h2>
-
-//       <div style={{ marginBottom: 15, textAlign: "center" }}>
-//         <input
-//           type="text"
-//           placeholder="Rechercher par INE"
-//           value={searchIne}
-//           onChange={(e) => setSearchIne(e.target.value)}
-//           disabled={isSubmitting}
-//           style={{ padding: 8, fontSize: 16, width: 280, borderRadius: 6, border: "1px solid #ccc" }}
-//         />
-//       </div>
-
-//       <div style={{ display: "flex", justifyContent: "center", gap: 12, marginBottom: 15 }}>
-//         <button
-//           onClick={handleCreate}
-//           disabled={isSubmitting}
-//           style={{
-//             padding: "10px 20px",
-//             backgroundColor: "#2563eb",
-//             color: "white",
-//             border: "none",
-//             borderRadius: 6,
-//             cursor: "pointer",
-//           }}
-//         >
-//           {isSubmitting && modalMode === "create" ? "En cours..." : "Créer évaluation"}
-//         </button>
-//         <button
-//           onClick={handleEdit}
-//           disabled={selectedIndex === null || isSubmitting}
-//           style={{
-//             padding: "10px 20px",
-//             backgroundColor: "#10b981",
-//             color: "white",
-//             border: "none",
-//             borderRadius: 6,
-//             cursor: selectedIndex === null ? "not-allowed" : "pointer",
-//           }}
-//         >
-//           Modifier évaluation
-//         </button>
-//         <button
-//           onClick={() => selectedIndex !== null && deleteEvaluation(filteredEvaluations[selectedIndex].id)}
-//           disabled={selectedIndex === null || isSubmitting}
-//           style={{
-//             padding: "10px 20px",
-//             backgroundColor: "#ef4444",
-//             color: "white",
-//             border: "none",
-//             borderRadius: 6,
-//             cursor: selectedIndex === null ? "not-allowed" : "pointer",
-//           }}
-//         >
-//           Supprimer évaluation
-//         </button>
-//       </div>
-
-//       {filteredEvaluations.length === 0 ? (
-//         <p style={{ textAlign: "center", padding: 20, color: "#888" }}>
-//           Aucune évaluation créée pour le moment.
-//         </p>
-//       ) : (
-//         <table style={{ width: "100%", borderCollapse: "collapse" }}>
-//           <thead>
-//             <tr style={{ backgroundColor: "#f1f5f9" }}>
-//               <th style={{ padding: 8, borderBottom: "2px solid #e5e7eb" }}>INE</th>
-//               <th style={{ padding: 8, borderBottom: "2px solid #e5e7eb" }}>Nom</th>
-//               <th style={{ padding: 8, borderBottom: "2px solid #e5e7eb" }}>Prénom</th>
-//               <th style={{ padding: 8, borderBottom: "2px solid #e5e7eb" }}>UE</th>
-//               <th style={{ padding: 8, borderBottom: "2px solid #e5e7eb" }}>EC</th>
-//               <th style={{ padding: 8, borderBottom: "2px solid #e5e7eb" }}>Année</th>
-//               <th style={{ padding: 8, borderBottom: "2px solid #e5e7eb" }}>Note contrôle</th>
-//               <th style={{ padding: 8, borderBottom: "2px solid #e5e7eb" }}>Note examen</th>
-//             </tr>
-//           </thead>
-//           <tbody>
-//             {filteredEvaluations.map((ev, index) => (
-//               <tr
-//                 key={ev.id}
-//                 onClick={() => setSelectedIndex(index)}
-//                 style={{
-//                   backgroundColor: selectedIndex === index ? "#e0f2fe" : index % 2 === 0 ? "#f8fafc" : "white",
-//                   cursor: "pointer",
-//                 }}
-//               >
-//                 <td style={{ padding: 8, borderBottom: "1px solid #e5e7eb" }}>{ev.inscription?.etudiant?.matricule}</td>
-//                 <td style={{ padding: 8, borderBottom: "1px solid #e5e7eb" }}>{ev.inscription?.etudiant?.nom}</td>
-//                 <td style={{ padding: 8, borderBottom: "1px solid #e5e7eb" }}>{ev.inscription?.etudiant?.prenom}</td>
-//                 <td style={{ padding: 8, borderBottom: "1px solid #e5e7eb" }}>{ev.inscription?.ec?.ue?.intitule}</td>
-//                 <td style={{ padding: 8, borderBottom: "1px solid #e5e7eb" }}>{ev.inscription?.ec?.intitule}</td>
-//                 <td style={{ padding: 8, borderBottom: "1px solid #e5e7eb" }}>{ev.inscription?.annee_inscription}</td>
-//                 <td style={{ padding: 8, borderBottom: "1px solid #e5e7eb" }}>{ev.note_controle}</td>
-//                 <td style={{ padding: 8, borderBottom: "1px solid #e5e7eb" }}>{ev.note_examen}</td>
-//               </tr>
-//             ))}
-//           </tbody>
-//         </table>
-//       )}
-
-//       {showModal && (
-//         <div
-//           style={{
-//             position: "fixed",
-//             top: 0,
-//             left: 0,
-//             width: "100vw",
-//             height: "100vh",
-//             backgroundColor: "rgba(0,0,0,0.3)",
-//             display: "flex",
-//             alignItems: "center",
-//             justifyContent: "center",
-//             zIndex: 100,
-//           }}
-//         >
-//           <div
-//             style={{
-//               backgroundColor: "white",
-//               padding: 30,
-//               borderRadius: 10,
-//               width: 400,
-//               boxShadow: "0 2px 15px rgba(0,0,0,0.2)",
-//             }}
-//           >
-//             <h3>{modalMode === "create" ? "Créer une évaluation" : "Modifier une évaluation"}</h3>
-//             <form onSubmit={handleModalSubmit}>
-//               {modalMode === "create" && (
-//                 <>
-//                   <label>Rechercher une inscription</label>
-//                   <input
-//                     type="text"
-//                     placeholder="Recherche par INE, nom, UE, EC"
-//                     value={inscriptionSearch}
-//                     onChange={(e) => setInscriptionSearch(e.target.value)}
-//                     disabled={isSubmitting}
-//                     style={{ width: "100%", marginBottom: 10, padding: 8 }}
-//                     autoFocus
-//                   />
-//                   <div style={{ maxHeight: 150, overflowY: "auto", border: "1px solid #ccc", marginBottom: 15 }}>
-//                     {filteredInscriptions.length === 0 ? (
-//                       <p style={{ padding: 8, color: "#888" }}>Aucune inscription trouvée.</p>
-//                     ) : (
-//                       filteredInscriptions.map((insc) => (
-//                         <div
-//                           key={insc.id}
-//                           onClick={() => !isSubmitting && setForm((f) => ({ ...f, inscriptionId: insc.id }))}
-//                           style={{
-//                             padding: "8px 12px",
-//                             cursor: isSubmitting ? "default" : "pointer",
-//                             backgroundColor: form.inscriptionId === insc.id ? "#d1fae5" : "transparent",
-//                             userSelect: "none",
-//                           }}
-//                         >
-//                           <strong>{insc.etudiant?.matricule}</strong> - {insc.etudiant?.nom} {insc.etudiant?.prenom} | UE:{" "}
-//                           {insc.ec?.ue?.intitule} | EC: {insc.ec?.intitule} | Année: {insc.annee_inscription}
-//                         </div>
-//                       ))
-//                     )}
-//                   </div>
-//                 </>
-//               )}
-
-//               <label>Note contrôle</label>
-//               <input
-//                 type="number"
-//                 step="0.01"
-//                 min="0"
-//                 max="20"
-//                 required
-//                 value={form.noteControle}
-//                 onChange={(e) => setForm((f) => ({ ...f, noteControle: e.target.value }))}
-//                 disabled={isSubmitting}
-//                 autoFocus={modalMode === "edit"}
-//                 style={{ width: "100%", marginBottom: 15, padding: 8 }}
-//               />
-
-//               <label>Note examen</label>
-//               <input
-//                 type="number"
-//                 step="0.01"
-//                 min="0"
-//                 max="20"
-//                 required
-//                 value={form.noteExamen}
-//                 onChange={(e) => setForm((f) => ({ ...f, noteExamen: e.target.value }))}
-//                 disabled={isSubmitting}
-//                 style={{ width: "100%", marginBottom: 15, padding: 8 }}
-//               />
-
-//               <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
-//                 <button
-//                   type="button"
-//                   onClick={() => setShowModal(false)}
-//                   disabled={isSubmitting}
-//                   style={{ padding: "8px 16px" }}
-//                 >
-//                   Annuler
-//                 </button>
-//                 <button
-//                   type="submit"
-//                   disabled={isSubmitting}
-//                   style={{ padding: "8px 16px", backgroundColor: "#10b981", color: "white" }}
-//                 >
-//                   {isSubmitting ? "En cours..." : modalMode === "create" ? "Créer" : "Enregistrer"}
-//                 </button>
-//               </div>
-//             </form>
-//           </div>
-//         </div>
-//       )}
-//     </div>
-//   );
-// };
-
-// export default GestionEvaluation;
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-// import React, { useState, useEffect } from "react";
-
-// const API_EVALUATIONS_URL = "http://localhost:8080/api/evaluations";
-
-// const GestionEvaluation = () => {
-//   const [evaluations, setEvaluations] = useState([]);
-//   const [filteredEvaluations, setFilteredEvaluations] = useState([]);
-//   const [searchIne, setSearchIne] = useState("");
-//   const [selectedIndex, setSelectedIndex] = useState(null);
-
-//   const [showModal, setShowModal] = useState(false);
-//   const [modalMode, setModalMode] = useState("create"); // 'create' or 'edit'
-//   const [form, setForm] = useState({
-//     noteControle: "",
-//     noteExamen: "",
-//     inscriptionId: "",
-//   });
-//   const [isSubmitting, setIsSubmitting] = useState(false);
-
-//   const [inscriptions, setInscriptions] = useState([]);
-//   const [inscriptionSearch, setInscriptionSearch] = useState("");
-//   const [filteredInscriptions, setFilteredInscriptions] = useState([]);
-
-//   // Récupère le token d'authentification dans sessionStorage
-//   const token = sessionStorage.getItem("token");
-
-//   // Charger toutes les évaluations depuis le backend
-//   const fetchEvaluations = async () => {
-//     try {
-//       const res = await fetch(API_EVALUATIONS_URL, {
-//         headers: { Authorization: `Bearer ${token}` },
-//       });
-//       if (!res.ok) throw new Error(`Erreur ${res.status}`);
-//       const data = await res.json();
-//       setEvaluations(data);
-//     } catch {
-//       setEvaluations([]);
-//     }
-//   };
-
-//   // Charger les inscriptions depuis localStorage (utilisé dans modal création)
-//   const loadInscriptionsFromLocalStorage = () => {
-//     try {
-//       const stored = localStorage.getItem("inscriptions");
-//       return stored ? JSON.parse(stored) : [];
-//     } catch {
-//       return [];
-//     }
-//   };
-
-//   // Au montage, chargement des évaluations
-//   useEffect(() => {
-//     fetchEvaluations();
-//   }, []);
-
-//   // Filtrer les évaluations selon recherche INE
-//   useEffect(() => {
-//     if (!searchIne) {
-//       setFilteredEvaluations(evaluations);
-//     } else {
-//       const searchLower = searchIne.toLowerCase();
-//       setFilteredEvaluations(
-//         evaluations.filter(
-//           (ev) =>
-//             ev.inscription?.etudiant?.matricule?.toLowerCase().includes(searchLower)
-//         )
-//       );
-//     }
-//   }, [searchIne, evaluations]);
-
-//   // Initialiser et filtrer les inscriptions lors de l'ouverture du modal création
-//   useEffect(() => {
-//     if (showModal && modalMode === "create") {
-//       const insc = loadInscriptionsFromLocalStorage();
-//       setInscriptions(insc);
-//       setFilteredInscriptions(insc);
-//       setInscriptionSearch("");
-//     }
-//   }, [showModal, modalMode]);
-
-//   // Filtrer inscriptions lors de la recherche dans le modal
-//   useEffect(() => {
-//     if (!inscriptionSearch) {
-//       setFilteredInscriptions(inscriptions);
-//     } else {
-//       const lower = inscriptionSearch.toLowerCase();
-//       setFilteredInscriptions(
-//         inscriptions.filter((insc) => {
-//           const etu = insc.etudiant || {};
-//           const ec = insc.ec || {};
-//           const ue = ec.ue || {};
-//           return (
-//             etu.matricule?.toLowerCase().includes(lower) ||
-//             etu.nom?.toLowerCase().includes(lower) ||
-//             etu.prenom?.toLowerCase().includes(lower) ||
-//             ec.intitule?.toLowerCase().includes(lower) ||
-//             ue.intitule?.toLowerCase().includes(lower) ||
-//             insc.annee_inscription?.toString().includes(lower)
-//           );
-//         })
-//       );
-//     }
-//   }, [inscriptionSearch, inscriptions]);
-
-//   // Créer ou modifier une évaluation via l'API
-//   const saveEvaluation = async (evaluation, idToUpdate = null) => {
-//     setIsSubmitting(true);
-//     const url = idToUpdate ? `${API_EVALUATIONS_URL}/${idToUpdate}` : API_EVALUATIONS_URL;
-//     const method = idToUpdate ? "PUT" : "POST";
-//     try {
-//       const res = await fetch(url, {
-//         method,
-//         headers: {
-//           "Content-Type": "application/json",
-//           Authorization: `Bearer ${token}`,
-//         },
-//         body: JSON.stringify(evaluation),
-//       });
-//       if (!res.ok) {
-//         const errorData = await res.json().catch(() => ({}));
-//         const message = errorData.message || `Erreur ${res.status}`;
-//         throw new Error(message);
-//       }
-//       await fetchEvaluations();
-//       setShowModal(false);
-//       setSelectedIndex(null);
-//     } catch (err) {
-//       alert("Erreur : " + err.message);
-//     } finally {
-//       setIsSubmitting(false);
-//     }
-//   };
-
-//   // Supprimer une évaluation via l'API
-//   const deleteEvaluation = async (id) => {
-//     if (!window.confirm("Confirmer la suppression ?")) return;
-//     try {
-//       const res = await fetch(`${API_EVALUATIONS_URL}/${id}`, {
-//         method: "DELETE",
-//         headers: { Authorization: `Bearer ${token}` },
-//       });
-//       if (!res.ok) throw new Error(`Erreur ${res.status}`);
-//       await fetchEvaluations();
-//       setSelectedIndex(null);
-//     } catch (err) {
-//       alert("Erreur suppression : " + err.message);
-//     }
-//   };
-
-//   // Soumission du formulaire dans le modal
-//   const handleModalSubmit = (e) => {
-//     e.preventDefault();
-
-//     const inscriptionIdNum = parseInt(form.inscriptionId, 10);
-//     if (isNaN(inscriptionIdNum) || inscriptionIdNum <= 0) {
-//       alert("ID inscription invalide");
-//       return;
-//     }
-//     const noteControleNum = parseFloat(form.noteControle);
-//     const noteExamenNum = parseFloat(form.noteExamen);
-
-//     if (
-//       isNaN(noteControleNum) ||
-//       noteControleNum < 0 ||
-//       noteControleNum > 20 ||
-//       isNaN(noteExamenNum) ||
-//       noteExamenNum < 0 ||
-//       noteExamenNum > 20
-//     ) {
-//       alert("Les notes doivent être comprises entre 0 et 20.");
-//       return;
-//     }
-
-//     const evaluationToSend = {
-//       noteControle: noteControleNum,
-//       noteExamen: noteExamenNum,
-//       inscription: { id: inscriptionIdNum },
-//     };
-
-//     if (modalMode === "create") saveEvaluation(evaluationToSend);
-//     else if (modalMode === "edit") {
-//       const idToUpdate = filteredEvaluations[selectedIndex].id;
-//       saveEvaluation(evaluationToSend, idToUpdate);
-//     }
-//   };
-
-//   // Ouvrir le modal création
-//   const handleCreate = () => {
-//     setModalMode("create");
-//     setForm({ noteControle: "", noteExamen: "", inscriptionId: "" });
-//     setShowModal(true);
-//   };
-
-//   // Ouvrir le modal modification
-//   const handleEdit = () => {
-//     if (selectedIndex === null) return;
-//     setModalMode("edit");
-//     const ev = filteredEvaluations[selectedIndex];
-//     setForm({
-//       noteControle: ev.note_controle?.toString() || "",
-//       noteExamen: ev.note_examen?.toString() || "",
-//       inscriptionId: ev.inscription.id,
-//     });
-//     setShowModal(true);
-//   };
-
-//   return (
-//     <div
-//       style={{
-//         maxWidth: 1100,
-//         margin: "40px auto",
-//         padding: 20,
-//         background: "white",
-//         borderRadius: 8,
-//         boxShadow: "0 2px 16px #e0e0e0",
-//       }}
-//     >
-//       <h2 style={{ textAlign: "center", marginBottom: 30 }}>Liste des évaluations</h2>
-
-//       <div style={{ marginBottom: 15, textAlign: "center" }}>
-//         <input
-//           type="text"
-//           placeholder="Rechercher par INE"
-//           value={searchIne}
-//           onChange={(e) => setSearchIne(e.target.value)}
-//           disabled={isSubmitting}
-//           style={{ padding: 8, fontSize: 16, width: 280, borderRadius: 6, border: "1px solid #ccc" }}
-//         />
-//       </div>
-
-//       <div style={{ display: "flex", justifyContent: "center", gap: 12, marginBottom: 15 }}>
-//         <button
-//           onClick={handleCreate}
-//           disabled={isSubmitting}
-//           style={{
-//             padding: "10px 20px",
-//             backgroundColor: "#2563eb",
-//             color: "white",
-//             border: "none",
-//             borderRadius: 6,
-//             cursor: "pointer",
-//           }}
-//         >
-//           {isSubmitting && modalMode === "create" ? "En cours..." : "Créer évaluation"}
-//         </button>
-//         <button
-//           onClick={handleEdit}
-//           disabled={selectedIndex === null || isSubmitting}
-//           style={{
-//             padding: "10px 20px",
-//             backgroundColor: "#10b981",
-//             color: "white",
-//             border: "none",
-//             borderRadius: 6,
-//             cursor: selectedIndex === null ? "not-allowed" : "pointer",
-//           }}
-//         >
-//           Modifier évaluation
-//         </button>
-//         <button
-//           onClick={() => selectedIndex !== null && deleteEvaluation(filteredEvaluations[selectedIndex].id)}
-//           disabled={selectedIndex === null || isSubmitting}
-//           style={{
-//             padding: "10px 20px",
-//             backgroundColor: "#ef4444",
-//             color: "white",
-//             border: "none",
-//             borderRadius: 6,
-//             cursor: selectedIndex === null ? "not-allowed" : "pointer",
-//           }}
-//         >
-//           Supprimer évaluation
-//         </button>
-//       </div>
-
-//       {filteredEvaluations.length === 0 ? (
-//         <p style={{ textAlign: "center", padding: 20, color: "#888" }}>
-//           Aucune évaluation créée pour le moment.
-//         </p>
-//       ) : (
-//         <table style={{ width: "100%", borderCollapse: "collapse" }}>
-//           <thead>
-//             <tr style={{ backgroundColor: "#f1f5f9" }}>
-//               <th style={{ padding: 8, borderBottom: "2px solid #e5e7eb" }}>INE</th>
-//               <th style={{ padding: 8, borderBottom: "2px solid #e5e7eb" }}>Nom</th>
-//               <th style={{ padding: 8, borderBottom: "2px solid #e5e7eb" }}>Prénom</th>
-//               <th style={{ padding: 8, borderBottom: "2px solid #e5e7eb" }}>UE</th>
-//               <th style={{ padding: 8, borderBottom: "2px solid #e5e7eb" }}>EC</th>
-//               <th style={{ padding: 8, borderBottom: "2px solid #e5e7eb" }}>Année</th>
-//               <th style={{ padding: 8, borderBottom: "2px solid #e5e7eb" }}>Note contrôle</th>
-//               <th style={{ padding: 8, borderBottom: "2px solid #e5e7eb" }}>Note examen</th>
-//             </tr>
-//           </thead>
-//           <tbody>
-//             {filteredEvaluations.map((ev, index) => (
-//               <tr
-//                 key={ev.id}
-//                 onClick={() => setSelectedIndex(index)}
-//                 style={{
-//                   backgroundColor: selectedIndex === index ? "#e0f2fe" : index % 2 === 0 ? "#f8fafc" : "white",
-//                   cursor: "pointer",
-//                 }}
-//               >
-//                 <td style={{ padding: 8, borderBottom: "1px solid #e5e7eb" }}>{ev.inscription?.etudiant?.matricule}</td>
-//                 <td style={{ padding: 8, borderBottom: "1px solid #e5e7eb" }}>{ev.inscription?.etudiant?.nom}</td>
-//                 <td style={{ padding: 8, borderBottom: "1px solid #e5e7eb" }}>{ev.inscription?.etudiant?.prenom}</td>
-//                 <td style={{ padding: 8, borderBottom: "1px solid #e5e7eb" }}>{ev.inscription?.ec?.ue?.intitule}</td>
-//                 <td style={{ padding: 8, borderBottom: "1px solid #e5e7eb" }}>{ev.inscription?.ec?.intitule}</td>
-//                 <td style={{ padding: 8, borderBottom: "1px solid #e5e7eb" }}>{ev.inscription?.annee_inscription}</td>
-//                 <td style={{ padding: 8, borderBottom: "1px solid #e5e7eb" }}>{ev.note_controle}</td>
-//                 <td style={{ padding: 8, borderBottom: "1px solid #e5e7eb" }}>{ev.note_examen}</td>
-//               </tr>
-//             ))}
-//           </tbody>
-//         </table>
-//       )}
-
-//       {showModal && (
-//         <div
-//           style={{
-//             position: "fixed",
-//             top: 0,
-//             left: 0,
-//             width: "100vw",
-//             height: "100vh",
-//             backgroundColor: "rgba(0,0,0,0.3)",
-//             display: "flex",
-//             alignItems: "center",
-//             justifyContent: "center",
-//             zIndex: 100,
-//           }}
-//         >
-//           <div
-//             style={{
-//               backgroundColor: "white",
-//               padding: 30,
-//               borderRadius: 10,
-//               width: 400,
-//               boxShadow: "0 2px 15px rgba(0,0,0,0.2)",
-//             }}
-//           >
-//             <h3>{modalMode === "create" ? "Créer une évaluation" : "Modifier une évaluation"}</h3>
-//             <form onSubmit={handleModalSubmit}>
-//               {modalMode === "create" && (
-//                 <>
-//                   <label>Rechercher une inscription</label>
-//                   <input
-//                     type="text"
-//                     placeholder="Recherche par INE, nom, UE, EC"
-//                     value={inscriptionSearch}
-//                     onChange={(e) => setInscriptionSearch(e.target.value)}
-//                     disabled={isSubmitting}
-//                     style={{ width: "100%", marginBottom: 10, padding: 8 }}
-//                     autoFocus
-//                   />
-//                   <div style={{ maxHeight: 150, overflowY: "auto", border: "1px solid #ccc", marginBottom: 15 }}>
-//                     {filteredInscriptions.length === 0 ? (
-//                       <p style={{ padding: 8, color: "#888" }}>Aucune inscription trouvée.</p>
-//                     ) : (
-//                       filteredInscriptions.map((insc) => (
-//                         <div
-//                           key={insc.id}
-//                           onClick={() => !isSubmitting && setForm((f) => ({ ...f, inscriptionId: insc.id }))}
-//                           style={{
-//                             padding: "8px 12px",
-//                             cursor: isSubmitting ? "default" : "pointer",
-//                             backgroundColor: form.inscriptionId === insc.id ? "#d1fae5" : "transparent",
-//                             userSelect: "none",
-//                           }}
-//                         >
-//                           <strong>{insc.etudiant?.matricule}</strong> - {insc.etudiant?.nom} {insc.etudiant?.prenom} | UE:{" "}
-//                           {insc.ec?.ue?.intitule} | EC: {insc.ec?.intitule} | Année: {insc.annee_inscription}
-//                         </div>
-//                       ))
-//                     )}
-//                   </div>
-//                 </>
-//               )}
-
-//               <label>Note contrôle</label>
-//               <input
-//                 type="number"
-//                 step="0.01"
-//                 min="0"
-//                 max="20"
-//                 required
-//                 value={form.noteControle}
-//                 onChange={(e) => setForm((f) => ({ ...f, noteControle: e.target.value }))}
-//                 disabled={isSubmitting}
-//                 autoFocus={modalMode === "edit"}
-//                 style={{ width: "100%", marginBottom: 15, padding: 8 }}
-//               />
-
-//               <label>Note examen</label>
-//               <input
-//                 type="number"
-//                 step="0.01"
-//                 min="0"
-//                 max="20"
-//                 required
-//                 value={form.noteExamen}
-//                 onChange={(e) => setForm((f) => ({ ...f, noteExamen: e.target.value }))}
-//                 disabled={isSubmitting}
-//                 style={{ width: "100%", marginBottom: 15, padding: 8 }}
-//               />
-
-//               <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
-//                 <button
-//                   type="button"
-//                   onClick={() => setShowModal(false)}
-//                   disabled={isSubmitting}
-//                   style={{ padding: "8px 16px" }}
-//                 >
-//                   Annuler
-//                 </button>
-//                 <button
-//                   type="submit"
-//                   disabled={isSubmitting}
-//                   style={{ padding: "8px 16px", backgroundColor: "#10b981", color: "white" }}
-//                 >
-//                   {isSubmitting ? "En cours..." : modalMode === "create" ? "Créer" : "Enregistrer"}
-//                 </button>
-//               </div>
-//             </form>
-//           </div>
-//         </div>
-//       )}
-//     </div>
-//   );
-// };
-
-// export default GestionEvaluation;
-
-
-
-
-
-
-
-
-
-
-// import React, { useState, useEffect } from "react";
-
-// const API_EVALUATIONS_URL = "http://localhost:8080/api/evaluations";
-
-// const GestionEvaluation = () => {
-//   const [evaluations, setEvaluations] = useState([]);
-//   const [filteredEvaluations, setFilteredEvaluations] = useState([]);
-//   const [searchIne, setSearchIne] = useState("");
-//   const [selectedIndex, setSelectedIndex] = useState(null);
-
-//   const [showModal, setShowModal] = useState(false);
-//   const [modalMode, setModalMode] = useState("create"); // 'create' or 'edit'
-//   const [form, setForm] = useState({
-//     noteControle: "",
-//     noteExamen: "",
-//     inscriptionId: "",
-//   });
-//   const [isSubmitting, setIsSubmitting] = useState(false);
-
-//   const [inscriptions, setInscriptions] = useState([]);
-//   const [inscriptionSearch, setInscriptionSearch] = useState("");
-//   const [filteredInscriptions, setFilteredInscriptions] = useState([]);
-
-//   // Charge token dans sessionStorage
-//   const token = sessionStorage.getItem("token");
-
-//   // Charger la liste des évaluations
-//   const fetchEvaluations = async () => {
-//     try {
-//       const res = await fetch(API_EVALUATIONS_URL, {
-//         headers: { Authorization: `Bearer ${token}` },
-//       });
-//       if (!res.ok) throw new Error(`Erreur ${res.status}`);
-//       const data = await res.json();
-//       setEvaluations(data);
-//     } catch {
-//       setEvaluations([]);
-//     }
-//   };
-
-//   // Charger inscriptions depuis localStorage (utilisé dans modal création)
-//   const loadInscriptionsFromLocalStorage = () => {
-//     try {
-//       const stored = localStorage.getItem("inscriptions");
-//       return stored ? JSON.parse(stored) : [];
-//     } catch {
-//       return [];
-//     }
-//   };
-
-//   useEffect(() => {
-//     fetchEvaluations();
-//   }, []);
-
-//   // Filtrage des évaluations selon recherche INE
-//   useEffect(() => {
-//     if (!searchIne) {
-//       setFilteredEvaluations(evaluations);
-//     } else {
-//       const searchLower = searchIne.toLowerCase();
-//       setFilteredEvaluations(
-//         evaluations.filter(
-//           (ev) =>
-//             ev.inscription?.etudiant?.matricule?.toLowerCase().includes(searchLower)
-//         )
-//       );
-//     }
-//   }, [searchIne, evaluations]);
-
-//   // Init inscriptions et filtre lors ouverture modal create
-//   useEffect(() => {
-//     if (showModal && modalMode === "create") {
-//       const insc = loadInscriptionsFromLocalStorage();
-//       setInscriptions(insc);
-//       setFilteredInscriptions(insc);
-//       setInscriptionSearch("");
-//     }
-//   }, [showModal, modalMode]);
-
-//   // Filtrage inscriptions recherche
-//   useEffect(() => {
-//     if (!inscriptionSearch) {
-//       setFilteredInscriptions(inscriptions);
-//     } else {
-//       const lower = inscriptionSearch.toLowerCase();
-//       setFilteredInscriptions(
-//         inscriptions.filter((insc) => {
-//           const etu = insc.etudiant || {};
-//           const ec = insc.ec || {};
-//           const ue = ec.ue || {};
-//           return (
-//             etu.matricule?.toLowerCase().includes(lower) ||
-//             etu.nom?.toLowerCase().includes(lower) ||
-//             etu.prenom?.toLowerCase().includes(lower) ||
-//             ec.intitule?.toLowerCase().includes(lower) ||
-//             ue.intitule?.toLowerCase().includes(lower) ||
-//             insc.annee_inscription?.toString().includes(lower)
-//           );
-//         })
-//       );
-//     }
-//   }, [inscriptionSearch, inscriptions]);
-
-//   // Création ou mise à jour API
-//   const saveEvaluation = async (evaluation, idToUpdate = null) => {
-//     setIsSubmitting(true);
-//     const url = idToUpdate ? `${API_EVALUATIONS_URL}/${idToUpdate}` : API_EVALUATIONS_URL;
-//     const method = idToUpdate ? "PUT" : "POST";
-//     try {
-//       const res = await fetch(url, {
-//         method,
-//         headers: {
-//           "Content-Type": "application/json",
-//           Authorization: `Bearer ${token}`,
-//         },
-//         body: JSON.stringify(evaluation),
-//       });
-//       if (!res.ok) {
-//         const errorData = await res.json().catch(() => ({}));
-//         const message = errorData.message || `Erreur ${res.status}`;
-//         throw new Error(message);
-//       }
-//       await fetchEvaluations();
-//       setShowModal(false);
-//       setSelectedIndex(null);
-//     } catch (err) {
-//       alert("Erreur : " + err.message);
-//     } finally {
-//       setIsSubmitting(false);
-//     }
-//   };
-
-//   // Suppression API
-//   const deleteEvaluation = async (id) => {
-//     if (!window.confirm("Confirmer la suppression ?")) return;
-//     try {
-//       const res = await fetch(`${API_EVALUATIONS_URL}/${id}`, {
-//         method: "DELETE",
-//         headers: { Authorization: `Bearer ${token}` },
-//       });
-//       if (!res.ok) throw new Error(`Erreur ${res.status}`);
-//       await fetchEvaluations();
-//       setSelectedIndex(null);
-//     } catch (err) {
-//       alert("Erreur suppression : " + err.message);
-//     }
-//   };
-
-//   // Gestion formulaire submit
-//   const handleModalSubmit = (e) => {
-//     e.preventDefault();
-
-//     const inscriptionIdNum = parseInt(form.inscriptionId, 10);
-//     if (isNaN(inscriptionIdNum) || inscriptionIdNum <= 0) {
-//       alert("ID inscription invalide");
-//       return;
-//     }
-//     const noteControleNum = parseFloat(form.noteControle);
-//     const noteExamenNum = parseFloat(form.noteExamen);
-
-//     if (
-//       isNaN(noteControleNum) ||
-//       noteControleNum < 0 ||
-//       noteControleNum > 20 ||
-//       isNaN(noteExamenNum) ||
-//       noteExamenNum < 0 ||
-//       noteExamenNum > 20
-//     ) {
-//       alert("Notes doivent être entre 0 et 20");
-//       return;
-//     }
-
-//     const evaluationToSend = {
-//       noteControle: noteControleNum,
-//       noteExamen: noteExamenNum,
-//       inscription: { id: inscriptionIdNum },
-//     };
-
-//     if (modalMode === "create") saveEvaluation(evaluationToSend);
-//     else if (modalMode === "edit") {
-//       const idToUpdate = filteredEvaluations[selectedIndex].id;
-//       saveEvaluation(evaluationToSend, idToUpdate);
-//     }
-//   };
-
-//   // Ouverture modal création
-//   const handleCreate = () => {
-//     setModalMode("create");
-//     setForm({ noteControle: "", noteExamen: "", inscriptionId: "" });
-//     setShowModal(true);
-//   };
-
-//   // Ouverture modal modification
-//   const handleEdit = () => {
-//     if (selectedIndex === null) return;
-//     setModalMode("edit");
-//     const ev = filteredEvaluations[selectedIndex];
-//     setForm({
-//       noteControle: ev.note_controle?.toString() || "",
-//       noteExamen: ev.note_examen?.toString() || "",
-//       inscriptionId: ev.inscription.id,
-//     });
-//     setShowModal(true);
-//   };
-
-//   return (
-//     <div style={{ maxWidth: 1100, margin: "40px auto", padding: 20, background: "white", borderRadius: 8, boxShadow: "0 2px 16px #e0e0e0" }}>
-//       <h2 style={{ textAlign: "center", marginBottom: 30 }}>Liste des évaluations</h2>
-//       <div style={{ marginBottom: 15, textAlign: "center" }}>
-//         <input
-//           type="text"
-//           placeholder="Rechercher par INE"
-//           value={searchIne}
-//           onChange={(e) => setSearchIne(e.target.value)}
-//           disabled={isSubmitting}
-//           style={{ padding: 8, fontSize: 16, width: 280, borderRadius: 6, border: "1px solid #ccc" }}
-//         />
-//       </div>
-//       <div style={{ display: "flex", justifyContent: "center", gap: 12, marginBottom: 15 }}>
-//         <button onClick={handleCreate} disabled={isSubmitting} style={{ padding: "10px 20px", backgroundColor: "#2563eb", color: "white", border: "none", borderRadius: 6, cursor: "pointer" }}>
-//           {isSubmitting && modalMode === "create" ? "En cours..." : "Créer évaluation"}
-//         </button>
-//         <button onClick={handleEdit} disabled={selectedIndex === null || isSubmitting} style={{ padding: "10px 20px", backgroundColor: "#10b981", color: "white", border: "none", borderRadius: 6, cursor: selectedIndex === null ? "not-allowed" : "pointer" }}>
-//           Modifier évaluation
-//         </button>
-//         <button onClick={() => selectedIndex !== null && deleteEvaluation(filteredEvaluations[selectedIndex].id)} disabled={selectedIndex === null || isSubmitting} style={{ padding: "10px 20px", backgroundColor: "#ef4444", color: "white", border: "none", borderRadius: 6, cursor: selectedIndex === null ? "not-allowed" : "pointer" }}>
-//           Supprimer évaluation
-//         </button>
-//       </div>
-//       <table style={{ width: "100%", borderCollapse: "collapse" }}>
-//         <thead>
-//           <tr style={{ backgroundColor: "#f1f5f9" }}>
-//             <th style={{ padding: 8, borderBottom: "2px solid #e5e7eb" }}>INE</th>
-//             <th style={{ padding: 8, borderBottom: "2px solid #e5e7eb" }}>Nom</th>
-//             <th style={{ padding: 8, borderBottom: "2px solid #e5e7eb" }}>Prénom</th>
-//             <th style={{ padding: 8, borderBottom: "2px solid #e5e7eb" }}>UE</th>
-//             <th style={{ padding: 8, borderBottom: "2px solid #e5e7eb" }}>EC</th>
-//             <th style={{ padding: 8, borderBottom: "2px solid #e5e7eb" }}>Année</th>
-//             <th style={{ padding: 8, borderBottom: "2px solid #e5e7eb" }}>Note contrôle</th>
-//             <th style={{ padding: 8, borderBottom: "2px solid #e5e7eb" }}>Note examen</th>
-//           </tr>
-//         </thead>
-//         <tbody>
-//           {filteredEvaluations.length === 0 ? (
-//             <tr>
-//               <td colSpan={8} style={{ padding: 20, color: "#888", textAlign: "center" }}>Aucune évaluation trouvée.</td>
-//             </tr>
-//           ) : (
-//             filteredEvaluations.map((ev, index) => (
-//               <tr
-//                 key={ev.id}
-//                 onClick={() => setSelectedIndex(index)}
-//                 style={{
-//                   backgroundColor: selectedIndex === index ? "#e0f2fe" : index % 2 === 0 ? "#f8fafc" : "white",
-//                   cursor: "pointer",
-//                 }}>
-//                 <td style={{ padding: 8, borderBottom: "1px solid #e5e7eb" }}>{ev.inscription?.etudiant?.matricule}</td>
-//                 <td style={{ padding: 8, borderBottom: "1px solid #e5e7eb" }}>{ev.inscription?.etudiant?.nom}</td>
-//                 <td style={{ padding: 8, borderBottom: "1px solid #e5e7eb" }}>{ev.inscription?.etudiant?.prenom}</td>
-//                 <td style={{ padding: 8, borderBottom: "1px solid #e5e7eb" }}>{ev.inscription?.ec?.ue?.intitule}</td>
-//                 <td style={{ padding: 8, borderBottom: "1px solid #e5e7eb" }}>{ev.inscription?.ec?.intitule}</td>
-//                 <td style={{ padding: 8, borderBottom: "1px solid #e5e7eb" }}>{ev.inscription?.annee_inscription}</td>
-//                 <td style={{ padding: 8, borderBottom: "1px solid #e5e7eb" }}>{ev.note_controle}</td>
-//                 <td style={{ padding: 8, borderBottom: "1px solid #e5e7eb" }}>{ev.note_examen}</td>
-//               </tr>
-//             ))
-//           )}
-//         </tbody>
-//       </table>
-
-//       {showModal && (
-//         <div style={{ position: "fixed", top: 0, left: 0, width: "100vw", height: "100vh", backgroundColor: "rgba(0,0,0,0.3)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100 }}>
-//           <div style={{ backgroundColor: "white", padding: 30, borderRadius: 10, width: 400, boxShadow: "0 2px 15px rgba(0,0,0,0.2)" }}>
-//             <h3>{modalMode === "create" ? "Créer une évaluation" : "Modifier une évaluation"}</h3>
-//             <form onSubmit={handleModalSubmit}>
-//               {modalMode === "create" && (
-//                 <>
-//                   <label>Rechercher une inscription</label>
-//                   <input
-//                     type="text"
-//                     placeholder="Recherche par INE, nom, UE, EC"
-//                     value={inscriptionSearch}
-//                     onChange={(e) => setInscriptionSearch(e.target.value)}
-//                     disabled={isSubmitting}
-//                     style={{ width: "100%", marginBottom: 10, padding: 8 }}
-//                   />
-//                   <div style={{ maxHeight: 150, overflowY: "auto", border: "1px solid #ccc", marginBottom: 15 }}>
-//                     {filteredInscriptions.length === 0 ? (
-//                       <p style={{ padding: 8, color: "#888" }}>Aucune inscription trouvée.</p>
-//                     ) : (
-//                       filteredInscriptions.map((insc) => (
-//                         <div
-//                           key={insc.id}
-//                           onClick={() => !isSubmitting && setForm((f) => ({ ...f, inscriptionId: insc.id }))}
-//                           style={{
-//                             padding: "8px 12px",
-//                             cursor: isSubmitting ? "default" : "pointer",
-//                             backgroundColor: form.inscriptionId === insc.id ? "#d1fae5" : "transparent",
-//                           }}>
-//                           <strong>{insc.etudiant?.matricule}</strong> - {insc.etudiant?.nom} {insc.etudiant?.prenom} | UE:{" "}
-//                           {insc.ec?.ue?.intitule} | EC: {insc.ec?.intitule} | Année: {insc.annee_inscription}
-//                         </div>
-//                       ))
-//                     )}
-//                   </div>
-//                 </>
-//               )}
-
-//               <label>Note contrôle</label>
-//               <input
-//                 type="number"
-//                 step="0.01"
-//                 min="0"
-//                 max="20"
-//                 required
-//                 value={form.noteControle}
-//                 onChange={(e) => setForm((f) => ({ ...f, noteControle: e.target.value }))}
-//                 disabled={isSubmitting}
-//                 autoFocus={modalMode === "edit"}
-//                 style={{ width: "100%", marginBottom: 15, padding: 8 }}
-//               />
-
-//               <label>Note examen</label>
-//               <input
-//                 type="number"
-//                 step="0.01"
-//                 min="0"
-//                 max="20"
-//                 required
-//                 value={form.noteExamen}
-//                 onChange={(e) => setForm((f) => ({ ...f, noteExamen: e.target.value }))}
-//                 disabled={isSubmitting}
-//                 style={{ width: "100%", marginBottom: 15, padding: 8 }}
-//               />
-
-//               <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
-//                 <button type="button" onClick={() => setShowModal(false)} disabled={isSubmitting} style={{ padding: "8px 16px" }}>
-//                   Annuler
-//                 </button>
-//                 <button type="submit" disabled={isSubmitting} style={{ padding: "8px 16px", backgroundColor: "#10b981", color: "white" }}>
-//                   {isSubmitting ? "En cours..." : modalMode === "create" ? "Créer" : "Enregistrer"}
-//                 </button>
-//               </div>
-//             </form>
-//           </div>
-//         </div>
-//       )}
-//     </div>
-//   );
-// };
-
-// export default GestionEvaluation;
